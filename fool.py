@@ -39,7 +39,7 @@ for _x in xrange(sz_x):
 
 coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
 
-def evaluate(genome,debug=False):
+def evaluate(genome,debug=False,save=None):
     net = NEAT.NeuralNetwork()
     genome.BuildPhenotype(net)
 
@@ -68,7 +68,7 @@ def evaluate(genome,debug=False):
     voxels[:,:,0,0]=thresh-0.01
     voxels[:,:,-1,0]=thresh-0.01
 
-    img1 = render(voxels,45,0) 
+    img1 = render(voxels,45,0,save=save) 
     img2 = render(voxels,90,10) 
     img3 = render(voxels,135,20) 
     img4 = render(voxels,180,30) 
@@ -79,10 +79,10 @@ def evaluate(genome,debug=False):
 
     if debug:
      return imgs,results
-    return float(results[:,680].sum()) #voxels.flatten().sum()
+    return float(results[:,680].prod()) #voxels.flatten().sum()
     
 params = NEAT.Parameters()
-params.PopulationSize = 40
+params.PopulationSize = 50
 params.DynamicCompatibility = True
 params.WeightDiffCoeff = 4.0
 params.CompatTreshold = 2.0
@@ -90,35 +90,40 @@ params.YoungAgeTreshold = 15
 params.SpeciesMaxStagnation = 15
 params.OldAgeTreshold = 35
 params.MinSpecies = 5
-params.MaxSpecies = 25
+params.MaxSpecies = 15
 params.RouletteWheelSelection = False
 params.RecurrentProb = 0.0
-params.OverallMutationRate = 0.8
+params.MutateRemLinkProb = 0.02;
+params.RecurrentProb = 0;
+params.OverallMutationRate = 0.15;
+params.MutateAddLinkProb = 0.08;
+params.MutateAddNeuronProb = 0.01;
+params.MutateWeightsProb = 0.90;
+params.MaxWeight = 8.0;
+params.WeightMutationMaxPower = 0.2;
+params.WeightReplacementMaxPower = 1.0;
 
-params.MutateWeightsProb = 0.90
+params.MutateActivationAProb = 0.0;
+params.ActivationAMutationMaxPower = 0.5;
+params.MinActivationA = 0.05;
+params.MaxActivationA = 6.0;
 
-params.WeightMutationMaxPower = 2.5
-params.WeightReplacementMaxPower = 5.0
-params.MutateWeightsSevereProb = 0.5
-params.WeightMutationRate = 0.25
+params.MutateNeuronActivationTypeProb = 0.03;
 
-params.MaxWeight = 8
+params.ActivationFunction_SignedSigmoid_Prob = 0.0;
+params.ActivationFunction_UnsignedSigmoid_Prob = 0.0;
+params.ActivationFunction_Tanh_Prob = 1.0;
+params.ActivationFunction_TanhCubic_Prob = 0.0;
+params.ActivationFunction_SignedStep_Prob = 1.0;
+params.ActivationFunction_UnsignedStep_Prob = 0.0;
+params.ActivationFunction_SignedGauss_Prob = 1.0;
+params.ActivationFunction_UnsignedGauss_Prob = 0.0;
+params.ActivationFunction_Abs_Prob = 0.0;
+params.ActivationFunction_SignedSine_Prob = 1.0;
+params.ActivationFunction_UnsignedSine_Prob = 0.0;
+params.ActivationFunction_Linear_Prob = 1.0;
 
-params.MutateAddNeuronProb = 0.03
-params.MutateAddLinkProb = 0.05
-params.MutateRemLinkProb = 0.0
 
-params.MinActivationA  = 4.9
-params.MaxActivationA  = 4.9
-
-params.ActivationFunction_SignedSigmoid_Prob = 1.0
-params.ActivationFunction_UnsignedSigmoid_Prob = 0.0
-params.ActivationFunction_Tanh_Prob = 0.0
-params.ActivationFunction_SignedStep_Prob = 1.0
-
-params.CrossoverRate = 0.75  # mutate only 0.25
-params.MultipointCrossoverRate = 0.4
-params.SurvivalRate = 0.2
 
 
 def getbest(i):
@@ -128,20 +133,24 @@ def getbest(i):
     #pop.RNG.Seed(i)
 
     generations = 0
-    for generation in range(50):
+    for generation in range(150):
         genome_list = NEAT.GetGenomeList(pop)
         fitness_list = NEAT.EvaluateGenomeList_Serial(genome_list, evaluate, display=False)
         NEAT.ZipFitness(genome_list, fitness_list)
         
-        best = max([x.GetLeader().GetFitness() for x in pop.Species])
-        print best
-        imgs,res = evaluate(pop.Species[0].GetLeader(),debug=True)
+        best_fits = [x.GetLeader().GetFitness() for x in pop.Species]
+        best = max(best_fits)
+        idx = best_fits.index(best)
+        print best,pop.Species[idx].GetLeader().GetFitness()
+        imgs,res = evaluate(pop.Species[idx].GetLeader(),debug=True,save="gen%d.ply"%generation)
+
         plt.ion()
         plt.clf()
         subfig=0
         t_imgs = len(imgs)
         for img in imgs:
          plt.subplot(t_imgs,1,subfig)
+         plt.title("Confidence: %0.2f%%" % (res[subfig,680]*100.0))
          plt.imshow(img)
          subfig+=1
         plt.draw()

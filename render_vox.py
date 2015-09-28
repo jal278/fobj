@@ -1,5 +1,6 @@
 import matplotlib
-matplotlib.use('gtkagg')
+import saveply
+matplotlib.use('tkagg')
 
 from matplotlib.colors import hsv_to_rgb
 from colorsys import hsv_to_rgb
@@ -34,7 +35,7 @@ def normalize_v3(arr):
     arr[:,2] /= lens                
     return arr
 
-def render(voxels,angle1=45,angle2=10):
+def render(voxels,angle1=45,angle2=10,save=None):
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
  #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
@@ -93,9 +94,16 @@ def render(voxels,angle1=45,angle2=10):
     #color = [1.0,0.,0.,1.]
     #glMaterialfv(GL_FRONT,GL_DIFFUSE,color)
     glBegin(GL_TRIANGLES);
+
+    color_idx = np.asarray(_verts,dtype=int)
+    colors = voxels[color_idx[:,0],color_idx[:,1],color_idx[:,2],1:]
     verts = _verts - numpy.array((sz_x/2,sz_y/2,sz_z/2))
     #Create an indexed view into the vertex array using the array of three indices for triangles
     tris = verts[faces]
+    tricols = colors[faces]
+
+    if save!=None:
+     saveply.save(save,verts,colors,faces)  
     #Calculate the normal for all the triangles, by taking the cross product of the vectors v1-v0, and v2-v0 in each triangle             
     n = numpy.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
     # n is now an array of normals per triangle. The length of each normal is dependent the vertices, 
@@ -106,17 +114,16 @@ def render(voxels,angle1=45,angle2=10):
     f_idx=0
     for tri in tris:
             #glNormal3f(*(n[f_idx]))
+            colors=tricols[f_idx]
             f_idx+=1
-            for k in tri:
+            for k in xrange(3):
              #k.reverse()
-             ints = map(int,k)
-
              #print verts[k]
-             color = voxels[ints[0],ints[1],ints[2],1:] 
-             color = hsv_to_rgb(*color) #hsv_to_rgb(color)
+             #color = voxels[ints[0],ints[1],ints[2],1:] 
+             #color = hsv_to_rgb(*color) #hsv_to_rgb(color)
              #print color
-             glColor3f(*color);
-             glVertex3f( *k)
+             glColor3f(*colors[k])
+             glVertex3f( *tri[k])
              
     glEnd();
     glPopMatrix()
@@ -153,9 +160,15 @@ if (__name__=='__main__'):
      voxels[val,0] = sum( (coordinates[val,1:])**2 )
      voxels[val,1] = ((1.0 - coordinates[val,1])+(coordinates[val,2]**2))/2.0 #np.random.random((3))
   voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
-  out = render(voxels)
-  import matplotlib
-  matplotlib.use('tkagg')
+
   import pylab as plt
-  plt.imshow(out)
-  plt.show() 
+  plt.ion() 
+  plt.show()
+  ang=0
+  while True:
+   out = render(voxels,ang,ang)
+   ang+=5
+   plt.clf()
+   plt.ion()
+   plt.imshow(out)
+   plt.pause(0.1) 
