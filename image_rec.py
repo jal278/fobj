@@ -20,13 +20,13 @@ transformer.set_mean('data', np.load(caffe_root + 'python/caffe/imagenet/ilsvrc_
 transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
 transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGBi
 
-
 # load labels
 imagenet_labels_filename = caffe_root + 'data/ilsvrc12/synset_words.txt'
 
 labels = np.loadtxt(imagenet_labels_filename, str, delimiter='\t')
 # set net to batch size of 50
-net.blobs['data'].reshape(4,3,224,224)
+batch_size=5
+net.blobs['data'].reshape(batch_size,3,224,224)
 
 
 def run_image(imgs,debug=False):

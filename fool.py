@@ -16,6 +16,7 @@ import pylab as plt
 from render_vox import render
 from image_rec import run_image 
 
+target_class = 682
 
 sz_x = 10
 sz_y = 20
@@ -69,20 +70,21 @@ def evaluate(genome,debug=False,save=None):
     voxels[:,:,-1,0]=thresh-0.01
 
     img1 = render(voxels,45,0,save=save) 
-    img2 = render(voxels,90,10) 
-    img3 = render(voxels,135,20) 
-    img4 = render(voxels,180,30) 
-    imgs = [img1,img2,img3,img4]
+    img2 = render(voxels,90,5) 
+    img3 = render(voxels,135,0) 
+    img4 = render(voxels,180,5) 
+    img5 = render(voxels,225,0)
+    imgs = [img1,img2,img3,img4,img5]
     #plt.imshow(img)
     #plt.show()
     results = run_image(imgs)  
 
     if debug:
      return imgs,results
-    return float(results[:,680].prod()) #voxels.flatten().sum()
+    return float(results[:,target_class].prod()) #voxels.flatten().sum()
     
 params = NEAT.Parameters()
-params.PopulationSize = 50
+params.PopulationSize = 100
 params.DynamicCompatibility = True
 params.WeightDiffCoeff = 4.0
 params.CompatTreshold = 2.0
@@ -125,6 +127,7 @@ params.ActivationFunction_Linear_Prob = 1.0;
 
 
 
+plt.figure(figsize=(12,18))
 
 def getbest(i):
 
@@ -133,7 +136,7 @@ def getbest(i):
     #pop.RNG.Seed(i)
 
     generations = 0
-    for generation in range(150):
+    for generation in range(250):
         genome_list = NEAT.GetGenomeList(pop)
         fitness_list = NEAT.EvaluateGenomeList_Serial(genome_list, evaluate, display=False)
         NEAT.ZipFitness(genome_list, fitness_list)
@@ -146,15 +149,16 @@ def getbest(i):
 
         plt.ion()
         plt.clf()
-        subfig=0
+        subfig=1
         t_imgs = len(imgs)
         for img in imgs:
          plt.subplot(t_imgs,1,subfig)
-         plt.title("Confidence: %0.2f%%" % (res[subfig,680]*100.0))
+         plt.title("Confidence: %0.2f%%" % (res[subfig-1,target_class]*100.0))
          plt.imshow(img)
          subfig+=1
         plt.draw()
         plt.pause(0.1)
+        plt.savefig("out%d.png"%generation)
         pop.Epoch()
 
         generations = generation

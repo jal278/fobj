@@ -3,7 +3,7 @@ import saveply
 matplotlib.use('tkagg')
 
 from matplotlib.colors import hsv_to_rgb
-from colorsys import hsv_to_rgb
+#from colorsys import hsv_to_rgb
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -96,7 +96,12 @@ def render(voxels,angle1=45,angle2=10,save=None):
     glBegin(GL_TRIANGLES);
 
     color_idx = np.asarray(_verts,dtype=int)
-    colors = voxels[color_idx[:,0],color_idx[:,1],color_idx[:,2],1:]
+
+
+    colors = abs(voxels[color_idx[:,0],color_idx[:,1],color_idx[:,2],1:])
+    colors = np.clip(colors,0,1)
+    colors = hsv_to_rgb(colors)
+
     verts = _verts - numpy.array((sz_x/2,sz_y/2,sz_z/2))
     #Create an indexed view into the vertex array using the array of three indices for triangles
     tris = verts[faces]
