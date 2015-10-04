@@ -5,6 +5,7 @@ import sys
 import time
 import random as rnd
 import numpy as np
+import cPickle
 import pickle as pickle
 import MultiNEAT as NEAT
 
@@ -12,9 +13,10 @@ import matplotlib
 matplotlib.use('gtkagg')
 import pylab as plt
 
-
 from render_vox import render
+import image_rec
 from image_rec import run_image 
+from melites import melites 
 
 target_class = 682
 
@@ -81,8 +83,9 @@ def evaluate(genome,debug=False,save=None):
 
     if debug:
      return imgs,results
-    return float(results[:,target_class].prod()) #voxels.flatten().sum()
-    
+    results = results.prod(axis=0)
+    return float(results[target_class]),results #voxels.flatten().sum()
+
 params = NEAT.Parameters()
 params.PopulationSize = 100
 params.DynamicCompatibility = True
@@ -125,12 +128,42 @@ params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
+if True:
+ to_load = "fool5.pkl"
+ stuff = cPickle.load(open(to_load,"rb"))
+ plt.figure(figsize=(12,18))
+ plt.ion()
 
+ sort_list=zip(stuff[0],range(1000))
+ sort_list.sort(reverse=True)
+ for k in sort_list[:50]:
+  print k,image_rec.labels[k[1]][:30]
+ asfd
 
-plt.figure(figsize=(12,18))
+ for idx in range(1000):
+  print image_rec.labels[idx][:50],stuff[0][idx]
+  imgs,res = evaluate(stuff[1][idx],debug=True,save="out/out%d.ply"%idx) 
+  plt.clf()
+  subfig=1
+  t_imgs = len(imgs)
+  for img in imgs:
+         plt.subplot(t_imgs,1,subfig)
+         plt.title("Confidence: %0.2f%%" % (res[subfig-1,target_class]*100.0))
+         plt.imshow(img)
+         subfig+=1
+  plt.draw()
+  plt.pause(0.1)
+  plt.savefig("out/out%d.png"%idx)
+ print "done.."
+ asdf 
 
-def getbest(i):
+def mapelites(seed,evals,seed_evals):
+    i = seed
+    generator = lambda :NEAT.Genome(0, 5, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
+    return melites(generator,params,evals,seed_evals,evaluate,checkpoint=True)
 
+def objective_driven(seed):
+    i = seed
     g = NEAT.Genome(0, 5, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
     pop = NEAT.Population(g, params, True, 1.0, i)
     #pop.RNG.Seed(i)
@@ -139,6 +172,7 @@ def getbest(i):
     for generation in range(250):
         genome_list = NEAT.GetGenomeList(pop)
         fitness_list = NEAT.EvaluateGenomeList_Serial(genome_list, evaluate, display=False)
+        fitness_list = [k[0] for k in fitness_list]
         NEAT.ZipFitness(genome_list, fitness_list)
         
         best_fits = [x.GetLeader().GetFitness() for x in pop.Species]
@@ -165,12 +199,10 @@ def getbest(i):
 
     return generations
 
-
-
 gens = []
 
 for run in range(1):
-    gen = getbest(run)
+    gen = mapelites(run,2000000,1000) #getbest(run)
     print('Run:', run, 'Generations to solve XOR:', gen)
     gens += [gen]
 

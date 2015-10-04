@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-
+import cPickle
 import os
 import sys
 import time
@@ -76,23 +76,25 @@ def evaluate(genome):
      behavior[x]=t
     return (4 - error)**2,behavior
 
-def melites(generator,params, evals,seed_evals, evaluate,seed=1):
-
+def melites(generator,params, evals,seed_evals, evaluate,seed=1,checkpoint=False,checkpoint_interval=20000):
+    g= generator()
     pop = NEAT.Population(g, params, True, 1.0, seed)
     pop.RNG.Seed(seed)
     species = pop.Species[0]
 
-    test= generator()
-    _,beh = evaluate(test)
-    test.Destroy() 
+    _,beh = evaluate(g)
+    g.Destroy() 
    
     behavior_shape = beh.shape[0]
 
     elite_score = -numpy.ones(behavior_shape)
     elite_map = {}
-
+    checkpt_counter=0
     for x in xrange(evals):
 
+     if checkpoint and ((x+1)%checkpoint_interval==0):
+      cPickle.dump([elite_score,elite_map],open("fool%d.pkl"%checkpt_counter,"wb"))
+      checkpt_counter+=1
      if x<seed_evals:
       new_baby = generator()
      else:
@@ -101,7 +103,7 @@ def melites(generator,params, evals,seed_evals, evaluate,seed=1):
       species.MutateGenome(False,pop,new_baby,params,pop.RNG)
 
      _,behavior = evaluate(new_baby)
-     to_update = np.nonzero(behavior>elite_score)[0]
+     to_update = np.nonzero(behavior>=elite_score)[0]
 
      for idx in to_update:  
       if idx in elite_map:
@@ -182,4 +184,4 @@ if(__name__=='__main__'):
         g=generator()
         #print hillclimb(g,params,10000,evaluate,10)
  
-        print melites(generator,params,100000,1, evaluate,seed=1)
+        print melites(generator,params,5000000,1000, evaluate,seed=1)
