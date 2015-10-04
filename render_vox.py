@@ -60,7 +60,7 @@ def render(voxels,angle1=45,angle2=10,save=None):
     glLoadIdentity()
 
     gluPerspective(90,1,0.01,1000)
-    gluLookAt(0,0,15, 0,0,0 ,0,1,0)
+    gluLookAt(0,0,20, 0,0,0 ,0,1,0)
 
     glMatrixMode(GL_MODELVIEW)
 

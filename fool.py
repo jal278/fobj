@@ -1,3 +1,5 @@
+import pyximport; pyximport.install()
+
 #!/usr/bin/python3
 import numpy
 import os
@@ -17,14 +19,15 @@ from render_vox import render
 import image_rec
 from image_rec import run_image 
 from melites import melites 
+from fool_eval import evaluate
 
 target_class = 682
 
-sz_x = 10
+sz_x = 20
 sz_y = 20
-sz_z = 10
+sz_z = 20
 
-coords = 5
+coords = 6
 coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords))
 
 x_grad = numpy.linspace(-1,1,sz_x)
@@ -39,24 +42,34 @@ for _x in xrange(sz_x):
    coordinates[_x,_y,_z,2]=y_grad[_y]
    coordinates[_x,_y,_z,3]=z_grad[_z]
    coordinates[_x,_y,_z,4]=x_grad[_x]**2+y_grad[_y]**2+z_grad[_z]**2
+   coordinates[_x,_y,_z,5]=x_grad[_x]**2+z_grad[_z]**2
 
 coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
-
+"""
 def evaluate(genome,debug=False,save=None):
+    verbose=True
+    if verbose:
+     print 'building...'
+
     net = NEAT.NeuralNetwork()
     genome.BuildPhenotype(net)
-
+    genome.CalculateDepth()
+    depth = genome.GetDepth()
+    print depth
     error = 0
 
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
     voxels = numpy.zeros((tot_vox,4))
+    if verbose:
+     print 'generating voxels...'
     for val in xrange(tot_vox):
      net.Flush()
      net.Input(coordinates[val]) #np.array([1., 0., 1.])) # can input numpy arrays, too
                                       # for some reason only np.float64 is supported
-     for _ in range(3):
+     for _ in xrange(depth):
         net.Activate()
+
      o = net.Output()
      voxels[val,:]=o
 
@@ -71,6 +84,8 @@ def evaluate(genome,debug=False,save=None):
     voxels[:,:,0,0]=thresh-0.01
     voxels[:,:,-1,0]=thresh-0.01
 
+    if verbose:
+     print 'rendering images'
     img1 = render(voxels,45,0,save=save) 
     img2 = render(voxels,90,5) 
     img3 = render(voxels,135,0) 
@@ -79,15 +94,18 @@ def evaluate(genome,debug=False,save=None):
     imgs = [img1,img2,img3,img4,img5]
     #plt.imshow(img)
     #plt.show()
+    if verbose:
+     print 'running image rec'
     results = run_image(imgs)  
 
     if debug:
      return imgs,results
     results = results.prod(axis=0)
     return float(results[target_class]),results #voxels.flatten().sum()
+"""
 
 params = NEAT.Parameters()
-params.PopulationSize = 100
+params.PopulationSize = 50
 params.DynamicCompatibility = True
 params.WeightDiffCoeff = 4.0
 params.CompatTreshold = 2.0
@@ -101,10 +119,10 @@ params.RecurrentProb = 0.0
 params.MutateRemLinkProb = 0.02;
 params.RecurrentProb = 0;
 params.OverallMutationRate = 0.15;
-params.MutateAddLinkProb = 0.08;
-params.MutateAddNeuronProb = 0.01;
+params.MutateAddLinkProb = 0.13;
+params.MutateAddNeuronProb = 0.03;
 params.MutateWeightsProb = 0.90;
-params.MaxWeight = 8.0;
+params.MaxWeight = 6.0;
 params.WeightMutationMaxPower = 0.2;
 params.WeightReplacementMaxPower = 1.0;
 
@@ -123,24 +141,23 @@ params.ActivationFunction_SignedStep_Prob = 1.0;
 params.ActivationFunction_UnsignedStep_Prob = 0.0;
 params.ActivationFunction_SignedGauss_Prob = 1.0;
 params.ActivationFunction_UnsignedGauss_Prob = 0.0;
-params.ActivationFunction_Abs_Prob = 0.0;
+params.ActivationFunction_Abs_Prob = 1.0;
 params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
-if True:
- to_load = "fool5.pkl"
+if False: #True:
+ to_load = "fool2.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
- plt.figure(figsize=(12,18))
+ plt.figure(figsize=(14,20))
  plt.ion()
 
  sort_list=zip(stuff[0],range(1000))
  sort_list.sort(reverse=True)
  for k in sort_list[:50]:
   print k,image_rec.labels[k[1]][:30]
- asfd
-
- for idx in range(1000):
+ raw_input()
+ for idx in range(0,1000):
   print image_rec.labels[idx][:50],stuff[0][idx]
   imgs,res = evaluate(stuff[1][idx],debug=True,save="out/out%d.ply"%idx) 
   plt.clf()
@@ -159,12 +176,12 @@ if True:
 
 def mapelites(seed,evals,seed_evals):
     i = seed
-    generator = lambda :NEAT.Genome(0, 5, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
+    generator = lambda :NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
     return melites(generator,params,evals,seed_evals,evaluate,checkpoint=True)
 
 def objective_driven(seed):
     i = seed
-    g = NEAT.Genome(0, 5, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
+    g = NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
     pop = NEAT.Population(g, params, True, 1.0, i)
     #pop.RNG.Seed(i)
 
@@ -202,7 +219,8 @@ def objective_driven(seed):
 gens = []
 
 for run in range(1):
-    gen = mapelites(run,2000000,1000) #getbest(run)
+    #gen = objective_driven(run)
+    gen = mapelites(run,2000000,200) #getbest(run)
     print('Run:', run, 'Generations to solve XOR:', gen)
     gens += [gen]
 

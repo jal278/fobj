@@ -76,7 +76,7 @@ def evaluate(genome):
      behavior[x]=t
     return (4 - error)**2,behavior
 
-def melites(generator,params, evals,seed_evals, evaluate,seed=1,checkpoint=False,checkpoint_interval=20000):
+def melites(generator,params, evals,seed_evals, evaluate,seed=1,checkpoint=False,checkpoint_interval=5000):
     g= generator()
     pop = NEAT.Population(g, params, True, 1.0, seed)
     pop.RNG.Seed(seed)
