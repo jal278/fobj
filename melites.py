@@ -24,8 +24,14 @@ def evaluate(genome):
 
     behavior=np.zeros(len(combos))
 
+    
+
     net = NEAT.NeuralNetwork()
     genome.BuildPhenotype(net)
+
+    coords=np.zeros((10,3),dtype=np.float)
+    net.Batch_input(coords,3)
+    asfd
 
     error = 0
 
@@ -76,44 +82,60 @@ def evaluate(genome):
      behavior[x]=t
     return (4 - error)**2,behavior
 
-def melites(generator,params, evals,seed_evals, evaluate,seed=1,checkpoint=False,checkpoint_interval=5000):
+class melites:
+  def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000):
+
+    self.generator=generator
+    self.params= params
+    self.evaluate = evaluate
+    self.seed_evals = seed_evals
+    self.checkpoint = checkpoint
+    self.checkpoint_interval = checkpoint_interval
     g= generator()
+
     pop = NEAT.Population(g, params, True, 1.0, seed)
     pop.RNG.Seed(seed)
-    species = pop.Species[0]
+
+    self.pop= pop
+    self.species = pop.Species[0]
 
     _,beh = evaluate(g)
     g.Destroy() 
    
-    behavior_shape = beh.shape[0]
+    self.behavior_shape = beh.shape[0]
 
-    elite_score = -numpy.ones(behavior_shape)
-    elite_map = {}
-    checkpt_counter=0
-    for x in xrange(evals):
+    self.elite_score = -numpy.ones(self.behavior_shape)
+    self.elite_map = {}
+    self.evals=0
+    self.checkpt_counter=0
 
-     if checkpoint and ((x+1)%checkpoint_interval==0):
-      cPickle.dump([elite_score,elite_map],open("fool%d.pkl"%checkpt_counter,"wb"))
-      checkpt_counter+=1
-     if x<seed_evals:
-      new_baby = generator()
+  def do_evals(self,num):
+
+    for x in xrange(num):
+
+     if self.checkpoint and ((self.evals+1)%self.checkpoint_interval==0):
+      cPickle.dump([self.elite_score,self.elite_map,self.evals],open("fool%d.pkl"%self.checkpt_counter,"wb"))
+      self.checkpt_counter+=1
+
+     if x<self.seed_evals:
+      new_baby = self.generator()
      else:
-      niche = random.randint(0,behavior_shape-1)
-      new_baby = NEAT.Genome(elite_map[niche])
-      species.MutateGenome(False,pop,new_baby,params,pop.RNG)
+      niche = random.randint(0,self.behavior_shape-1)
+      new_baby = NEAT.Genome(self.elite_map[niche])
+      self.species.MutateGenome(False,self.pop,new_baby,self.params,self.pop.RNG)
 
-     _,behavior = evaluate(new_baby)
-     to_update = np.nonzero(behavior>=elite_score)[0]
+     _,behavior = self.evaluate(new_baby)
+     to_update = np.nonzero(behavior>=self.elite_score)[0]
 
      for idx in to_update:  
-      if idx in elite_map:
-       elite_map[idx].Destroy()
-      elite_score[idx]=behavior[idx]
-      elite_map[idx]=NEAT.Genome(new_baby)
+      if idx in self.elite_map:
+       self.elite_map[idx].Destroy()
+      self.elite_score[idx]=behavior[idx]
+      self.elite_map[idx]=NEAT.Genome(new_baby)
      
-     new_baby.Destroy()     
-    return elite_score,elite_map
-    
+     new_baby.Destroy()  
+     self.evals+=1   
+    return self.elite_score,self.elite_map
 
 def hillclimb(g,params,evals,evaluate,seed=1):
     pop = NEAT.Population(g, params, True, 1.0, seed)
@@ -179,9 +201,10 @@ if(__name__=='__main__'):
 	params.CrossoverRate = 0.75  # mutate only 0.25
 	params.MultipointCrossoverRate = 0.4
 	params.SurvivalRate = 0.2
-
-	generator = lambda :NEAT.Genome(0, 3, 0, 1, False, NEAT.ActivationFunction.UNSIGNED_SIGMOID, NEAT.ActivationFunction.UNSIGNED_SIGMOID, 0, params)
-        g=generator()
+        def generator():
+          return NEAT.Genome(0, 3, 0, 1, False, NEAT.ActivationFunction.UNSIGNED_SIGMOID, NEAT.ActivationFunction.UNSIGNED_SIGMOID, 0, params)
+         
+	g=generator()
         #print hillclimb(g,params,10000,evaluate,10)
  
         print melites(generator,params,5000000,1000, evaluate,seed=1)

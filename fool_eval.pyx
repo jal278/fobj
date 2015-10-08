@@ -48,6 +48,7 @@ def evaluate(genome,bool debug=False,save=None):
     if verbose:
      print 'generating voxels...'
 
+
     cdef long int val
     for val in xrange(tot_vox):
      #net.Flush()

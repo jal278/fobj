@@ -28,7 +28,7 @@ sz_y = 20
 sz_z = 20
 
 coords = 6
-coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords))
+coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords),dtype=np.double)
 
 x_grad = numpy.linspace(-1,1,sz_x)
 y_grad = numpy.linspace(-1,1,sz_y)
@@ -45,6 +45,7 @@ for _x in xrange(sz_x):
    coordinates[_x,_y,_z,5]=x_grad[_x]**2+z_grad[_z]**2
 
 coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
+
 """
 def evaluate(genome,debug=False,save=None):
     verbose=True
@@ -61,6 +62,9 @@ def evaluate(genome,debug=False,save=None):
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
     voxels = numpy.zeros((tot_vox,4))
+    print "calling batch..."
+    #net.Batch_input(coordinates,depth)
+    print "complete"
     if verbose:
      print 'generating voxels...'
     for val in xrange(tot_vox):
@@ -146,8 +150,8 @@ params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
-if False: #True:
- to_load = "fool2.pkl"
+if True: #True: #True:
+ to_load = "fool9.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
  plt.figure(figsize=(14,20))
  plt.ion()
@@ -161,6 +165,9 @@ if False: #True:
   print image_rec.labels[idx][:50],stuff[0][idx]
   imgs,res = evaluate(stuff[1][idx],debug=True,save="out/out%d.ply"%idx) 
   plt.clf()
+
+  fig = plt.gcf()
+  fig.suptitle(image_rec.labels[idx][:30])
   subfig=1
   t_imgs = len(imgs)
   for img in imgs:
@@ -174,10 +181,14 @@ if False: #True:
  print "done.."
  asdf 
 
-def mapelites(seed,evals,seed_evals):
+def generator(): 
+     return NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
+
+def mapelites(seed,evals,seed_evals,cpi):
     i = seed
-    generator = lambda :NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
-    return melites(generator,params,evals,seed_evals,evaluate,checkpoint=True)
+
+    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True)
+    run.do_evals(evals) 
 
 def objective_driven(seed):
     i = seed
@@ -220,7 +231,7 @@ gens = []
 
 for run in range(1):
     #gen = objective_driven(run)
-    gen = mapelites(run,2000000,200) #getbest(run)
+    gen = mapelites(run,2000000,200,10000) #getbest(run)
     print('Run:', run, 'Generations to solve XOR:', gen)
     gens += [gen]
 
