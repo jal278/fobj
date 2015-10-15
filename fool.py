@@ -10,7 +10,7 @@ import numpy as np
 import cPickle
 import pickle as pickle
 import MultiNEAT as NEAT
-
+NEAT.import_array()
 import matplotlib
 matplotlib.use('gtkagg')
 import pylab as plt
@@ -46,7 +46,6 @@ for _x in xrange(sz_x):
 
 coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
 
-"""
 def evaluate(genome,debug=False,save=None):
     verbose=True
     if verbose:
@@ -55,16 +54,18 @@ def evaluate(genome,debug=False,save=None):
     net = NEAT.NeuralNetwork()
     genome.BuildPhenotype(net)
     genome.CalculateDepth()
+
     depth = genome.GetDepth()
-    print depth
     error = 0
 
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
     voxels = numpy.zeros((tot_vox,4))
+
     print "calling batch..."
-    #net.Batch_input(coordinates,depth)
+    voxels = net.Batch_input(coordinates,depth)
     print "complete"
+    """
     if verbose:
      print 'generating voxels...'
     for val in xrange(tot_vox):
@@ -76,7 +77,7 @@ def evaluate(genome,debug=False,save=None):
 
      o = net.Output()
      voxels[val,:]=o
-
+    """
     voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
     thresh=0.5
     voxels[0,:,:,0]=thresh-0.01
@@ -106,7 +107,6 @@ def evaluate(genome,debug=False,save=None):
      return imgs,results
     results = results.prod(axis=0)
     return float(results[target_class]),results #voxels.flatten().sum()
-"""
 
 params = NEAT.Parameters()
 params.PopulationSize = 50
@@ -151,7 +151,7 @@ params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
 if True: #True: #True:
- to_load = "fool9.pkl"
+ to_load = "fool3.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
  plt.figure(figsize=(14,20))
  plt.ion()
@@ -230,8 +230,11 @@ def objective_driven(seed):
 gens = []
 
 for run in range(1):
-    #gen = objective_driven(run)
-    gen = mapelites(run,2000000,200,10000) #getbest(run)
+    obj=True
+    if obj:
+     gen = objective_driven(run)
+    else:
+     gen = mapelites(run,2000000,200,10000) #getbest(run)
     print('Run:', run, 'Generations to solve XOR:', gen)
     gens += [gen]
 

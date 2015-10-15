@@ -48,20 +48,17 @@ def evaluate(genome,bool debug=False,save=None):
     if verbose:
      print 'generating voxels...'
 
-
     cdef long int val
     for val in xrange(tot_vox):
-     #net.Flush()
-     net.Input(coordinates[val]) #np.array([1., 0., 1.])) # can input numpy arrays, too
-                                      # for some reason only np.float64 is supported
+     net.Flush()
+     net.Input(coordinates[val])
      for _ in xrange(depth):
         net.Activate()
-
      o = net.Output()
      voxels[val,:]=o
 
     voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
-    thresh=0.5
+    thresh = 0.5
     voxels[0,:,:,0]=thresh-0.01
     voxels[-1,:,:,0]=thresh-0.01
 
@@ -79,13 +76,17 @@ def evaluate(genome,bool debug=False,save=None):
     img4 = render(voxels,180,5) 
     img5 = render(voxels,225,0)
     imgs = [img1,img2,img3,img4,img5]
+
     #plt.imshow(img)
     #plt.show()
+
     if verbose:
      print 'running image rec'
     results = run_image(imgs)  
 
     if debug:
      return imgs,results
+
     results = results.prod(axis=0)
+
     return float(results[target_class]),results #voxels.flatten().sum()

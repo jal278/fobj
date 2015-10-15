@@ -107,6 +107,7 @@ def render(voxels,angle1=45,angle2=10,save=None):
     tris = verts[faces]
     tricols = colors[faces]
 
+    #print faces.shape
     if save!=None:
      saveply.save(save,verts,colors,faces)  
     #Calculate the normal for all the triangles, by taking the cross product of the vectors v1-v0, and v2-v0 in each triangle             
