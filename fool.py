@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use('gtkagg')
 import pylab as plt
 
-from render_vox import render
+from render_vox_fast import render
 import image_rec
 from image_rec import run_image 
 from melites import melites 
@@ -150,7 +150,7 @@ params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
-if True: #True: #True:
+if False: #True: #True:
  to_load = "fool3.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
  plt.figure(figsize=(14,20))
@@ -230,7 +230,7 @@ def objective_driven(seed):
 gens = []
 
 for run in range(1):
-    obj=True
+    obj=False 
     if obj:
      gen = objective_driven(run)
     else:
