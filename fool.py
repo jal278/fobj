@@ -53,16 +53,23 @@ def evaluate(genome,debug=False,save=None):
 
     net = NEAT.NeuralNetwork()
     genome.BuildPhenotype(net)
-    genome.CalculateDepth()
 
-    depth = genome.GetDepth()
+    if verbose:
+     print 'dcalc'
+    #genome.CalculateDepth()
+    if verbose:
+     print 'dcalc complete'
+
+    #depth = genome.GetDepth()
+    depth=6
+
     error = 0
 
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
     voxels = numpy.zeros((tot_vox,4))
 
-    print "calling batch..."
+    print "calling batch...", genome.NumNeurons()
     voxels = net.Batch_input(coordinates,depth)
     print "complete"
     """
@@ -89,14 +96,19 @@ def evaluate(genome,debug=False,save=None):
     voxels[:,:,0,0]=thresh-0.01
     voxels[:,:,-1,0]=thresh-0.01
 
+    bg_color = [net.neurons[k].time_const for k in range(3)]
+    print bg_color 
     if verbose:
      print 'rendering images'
-    img1 = render(voxels,45,0,save=save) 
-    img2 = render(voxels,90,5) 
-    img3 = render(voxels,135,0) 
-    img4 = render(voxels,180,5) 
-    img5 = render(voxels,225,0)
-    imgs = [img1,img2,img3,img4,img5]
+    angle_interval=45
+    img1 = render(voxels,bg_color,0,0,save=save) 
+    img2 = render(voxels,bg_color,45,5) 
+    img3 = render(voxels,bg_color,90,0) 
+    img4 = render(voxels,bg_color,135,5) 
+    img5 = render(voxels,bg_color,180,0)
+    img6 = render(voxels,bg_color,225,5)
+    imgs = [img1,img2,img3,img4,img5,img6]
+
     #plt.imshow(img)
     #plt.show()
     if verbose:
@@ -120,8 +132,7 @@ params.MinSpecies = 5
 params.MaxSpecies = 15
 params.RouletteWheelSelection = False
 params.RecurrentProb = 0.0
-params.MutateRemLinkProb = 0.02;
-params.RecurrentProb = 0;
+params.MutateRemLinkProb = 0.0;
 params.OverallMutationRate = 0.15;
 params.MutateAddLinkProb = 0.13;
 params.MutateAddNeuronProb = 0.03;
@@ -130,18 +141,27 @@ params.MaxWeight = 6.0;
 params.WeightMutationMaxPower = 0.2;
 params.WeightReplacementMaxPower = 1.0;
 
-params.MutateActivationAProb = 0.0;
+params.TimeConstantMutationMaxPower=0.2
+params.BiasMutationMaxPower=0.2
+params.MutateNeuronBiasesProb = 0.05
+params.MutateNeuronTimeConstantsProb = 0.05
+params.MaxNeuronTimeConstant =1.0
+params.MinNeuronTimeConstant =0.0
+params.MaxNeuronBias = 1.0
+params.MinNeuronBias = 0.0
+
+params.MutateActivationAProb = 0.05;
 params.ActivationAMutationMaxPower = 0.5;
 params.MinActivationA = 0.05;
 params.MaxActivationA = 6.0;
 
 params.MutateNeuronActivationTypeProb = 0.03;
 
-params.ActivationFunction_SignedSigmoid_Prob = 0.0;
+params.ActivationFunction_SignedSigmoid_Prob = 1.0;
 params.ActivationFunction_UnsignedSigmoid_Prob = 0.0;
-params.ActivationFunction_Tanh_Prob = 1.0;
+params.ActivationFunction_Tanh_Prob = 0.0;
 params.ActivationFunction_TanhCubic_Prob = 0.0;
-params.ActivationFunction_SignedStep_Prob = 1.0;
+params.ActivationFunction_SignedStep_Prob = 0.0;
 params.ActivationFunction_UnsignedStep_Prob = 0.0;
 params.ActivationFunction_SignedGauss_Prob = 1.0;
 params.ActivationFunction_UnsignedGauss_Prob = 0.0;
@@ -150,8 +170,8 @@ params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
-if False: #True: #True:
- to_load = "fool3.pkl"
+if True:
+ to_load = "fool67.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
  plt.figure(figsize=(14,20))
  plt.ion()
@@ -172,7 +192,7 @@ if False: #True: #True:
   t_imgs = len(imgs)
   for img in imgs:
          plt.subplot(t_imgs,1,subfig)
-         plt.title("Confidence: %0.2f%%" % (res[subfig-1,target_class]*100.0))
+         plt.title("Confidence: %0.2f%%" % (res[subfig-1,idx]*100.0))
          plt.imshow(img)
          subfig+=1
   plt.draw()

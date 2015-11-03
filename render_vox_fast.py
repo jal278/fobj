@@ -37,7 +37,7 @@ def normalize_v3(arr):
     arr[:,2] /= lens                
     return arr
 
-def render(voxels,angle1=45,angle2=10,save=None):
+def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None):
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
  #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
@@ -78,7 +78,9 @@ def render(voxels,angle1=45,angle2=10,save=None):
     #glDisable(GL_CULL_FACE)
     #glDisable(GL_DEPTH_TEST)
     # Black background for the Helix
-    glClearColor(0.5, 0.5, 0.5, 1.0)
+    
+    glClearColor(bg_color[0], bg_color[1], bg_color[2], 1.0)
+
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
 
     # Fallback to white

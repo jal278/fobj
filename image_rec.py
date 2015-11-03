@@ -24,7 +24,7 @@ transformer.set_channel_swap('data', (2,1,0))  # the reference model has channel
 imagenet_labels_filename = caffe_root + 'data/ilsvrc12/synset_words.txt'
 labels = np.loadtxt(imagenet_labels_filename, str, delimiter='\t')
 # set net to batch size of 50
-batch_size=5
+batch_size=6
 net.blobs['data'].reshape(batch_size,3,224,224)
 
 

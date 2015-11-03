@@ -103,35 +103,52 @@ class melites:
     g.Destroy() 
    
     self.behavior_shape = beh.shape[0]
-
+    self.reset_tries=5
+    self.tries = numpy.ones(self.behavior_shape)*self.reset_tries
     self.elite_score = -numpy.ones(self.behavior_shape)
     self.elite_map = {}
     self.evals=0
     self.checkpt_counter=0
+    self.greedy=True
 
   def do_evals(self,num):
-
+    r_indx = numpy.array(range(self.behavior_shape),dtype=int)
     for x in xrange(num):
-
+     if x%10000==0:
+      print 'eval %d' % x
      if self.checkpoint and ((self.evals+1)%self.checkpoint_interval==0):
       cPickle.dump([self.elite_score,self.elite_map,self.evals],open("fool%d.pkl"%self.checkpt_counter,"wb"))
       self.checkpt_counter+=1
-
+     niche=None
      if x<self.seed_evals:
       new_baby = self.generator()
      else:
-      niche = random.randint(0,self.behavior_shape-1)
+      if self.tries.sum()<=0:
+       self.tries[:]=self.reset_tries
+
+      print "pos p:", np.nonzero(self.tries>0)[0].shape    
+      p=self.tries[r_indx]/self.tries.sum()
+      niche = numpy.random.choice(r_indx,p=p) #random.randint(0,self.behavior_shape-1)
+      if self.greedy:
+        self.tries[niche]-=1
       new_baby = NEAT.Genome(self.elite_map[niche])
       self.species.MutateGenome(False,self.pop,new_baby,self.params,self.pop.RNG)
 
      _,behavior = self.evaluate(new_baby)
-     to_update = np.nonzero(behavior>=self.elite_score)[0]
+     to_update = np.nonzero(behavior>self.elite_score)[0]
+     improve = np.any(behavior>(1.05*self.elite_score))
+
+     if niche!=None and improve:
+      self.tries[niche]=self.reset_tries
 
      for idx in to_update:  
       if idx in self.elite_map:
        self.elite_map[idx].Destroy()
+      old_score = self.elite_score[idx]
       self.elite_score[idx]=behavior[idx]
       self.elite_map[idx]=NEAT.Genome(new_baby)
+      if old_score*1.05 < behavior[idx]:
+       self.tries[idx]=self.reset_tries
      
      new_baby.Destroy()  
      self.evals+=1   
