@@ -1,8 +1,8 @@
 import matplotlib
 import saveply
 matplotlib.use('tkagg')
-
 from matplotlib.colors import hsv_to_rgb
+from skimage import measure
 #from colorsys import hsv_to_rgb
 
 from OpenGL.GL import *
@@ -12,14 +12,14 @@ from OpenGL.GL.EXT.framebuffer_object import *
 from ctypes import *
 from math import *
 
-import mcubes
+#import mcubes
 
 import numpy
 import os
 import sys
 import time
 import random as rnd
-import cv2
+#import cv2
 import numpy as np
 import pickle as pickle
 
@@ -38,8 +38,9 @@ def normalize_v3(arr):
 def render(voxels,angle1=45,angle2=10,save=None):
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
- #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
- _verts,faces = mcubes.marching_cubes(voxels[:,:,:,0],thresh)
+
+ _verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
+ #_verts,faces = mcubes.marching_cubes(voxels[:,:,:,0],thresh)
 
  glClearColor(0.0, 0.0, 0.0, 1.0)
  glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
@@ -142,30 +143,21 @@ if (__name__=='__main__'):
   sz_y = 20
   sz_z = 10
 
-  coords = 5
-  coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords))
+  voxels = numpy.zeros((sz_x,sz_y,sz_z,4))
+  for x in xrange(sz_x):
+   for y in xrange(sz_y):
+    for z in xrange(sz_z):
+      
+     #index 0 of voxel array is 'matter' concentration
+     #marching cubes will look for when this concentration
+     #crosses a particular threshold and output a surface
+     xc = (float(x)/sz_x - 0.5) *2.0 #create range from -1 to 1
+     yc = (float(y)/sz_y - 0.5) *2.0
+     zc = (float(z)/sz_z - 0.5) *2.0
+     voxels[x,y,z,0] = xc**2+yc**2+zc**2 #define a sphere
 
-  x_grad = numpy.linspace(-1,1,sz_x)
-  y_grad = numpy.linspace(-1,1,sz_y)
-  z_grad = numpy.linspace(-1,1,sz_z)
-
-  for _x in xrange(sz_x):
-   for _y in xrange(sz_y):
-    for _z in xrange(sz_z):
-     coordinates[_x,_y,_z,0]=1.0 #x_grad[_x]
-     coordinates[_x,_y,_z,1]=x_grad[_x]
-     coordinates[_x,_y,_z,2]=y_grad[_y]
-     coordinates[_x,_y,_z,3]=z_grad[_z]
-     coordinates[_x,_y,_z,4]=x_grad[_x]**2+y_grad[_y]**2+z_grad[_z]**2
-
-  coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
-
-  tot_vox = sz_x*sz_y*sz_z
-  voxels = numpy.zeros((tot_vox,4))
-  for val in xrange(tot_vox):
-     voxels[val,0] = sum( (coordinates[val,1:])**2 )
-     voxels[val,1] = ((1.0 - coordinates[val,1])+(coordinates[val,2]**2))/2.0 #np.random.random((3))
-  voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
+     #index 1,2,3 are HSV color for that voxel
+     voxels[x,y,z,1:] = np.random.random((3))
 
   import pylab as plt
   plt.ion() 

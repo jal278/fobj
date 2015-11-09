@@ -171,7 +171,7 @@ params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
 if True:
- to_load = "fool67.pkl"
+ to_load = "fool100.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
  plt.figure(figsize=(14,20))
  plt.ion()
