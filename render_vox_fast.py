@@ -37,7 +37,7 @@ def normalize_v3(arr):
     arr[:,2] /= lens                
     return arr
 
-def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None):
+def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,spec=1.0,shiny=100,lighting=True):
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
  #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
@@ -72,9 +72,21 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None):
     glRotatef (angle1, 0.0, 1.0, 0.0); 
     glRotatef (angle2, 0.1, 0.0, 0.0); 
 
-    #glEnable(GL_CULL_FACE)
+    glEnable(GL_CULL_FACE)
     glEnable(GL_DEPTH_TEST)
-    #glEnable(GL_LIGHTING)
+
+    if lighting:
+     glEnable(GL_COLOR_MATERIAL)
+     glEnable(GL_LIGHTING)
+     glEnable(GL_LIGHT0)
+     glColorMaterial(GL_FRONT,GL_AMBIENT_AND_DIFFUSE)
+     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [amb,amb,amb,1.0]);
+     glMaterialfv(GL_FRONT, GL_SPECULAR, [spec,spec,spec]);
+     glMaterialfv(GL_FRONT, GL_SHININESS, shiny);
+     glLightfv(GL_LIGHT0, GL_POSITION, [0.0,2.0,-1.0,0.0]);
+
+
+
     #glDisable(GL_CULL_FACE)
     #glDisable(GL_DEPTH_TEST)
     # Black background for the Helix
@@ -118,43 +130,49 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None):
     # n is now an array of normals per triangle. The length of each normal is dependent the vertices, 
     # we need to normalize these, so that our next step weights each normal equally.
     n=normalize_v3(n)
+
+    vnorms=numpy.zeros(verts.shape,dtype=numpy.float32)
+
+    if True: #angle1%2==0:
+     for idx in xrange(len(tris)):
+      face=faces[idx]
+      vnorms[face[0]]+=n[idx]
+      vnorms[face[1]]+=n[idx]
+      vnorms[face[2]]+=n[idx]
+    else:
+     vnorms[faces[:,0]]+=n
+     vnorms[faces[:,1]]+=n 
+     vnorms[faces[:,2]]+=n
+
+    vnorms=normalize_v3(vnorms)
+  
     verts=numpy.asarray(verts,dtype=numpy.float32)
     colors=numpy.asarray(colors,dtype=numpy.float32) 
+    vnorms=numpy.asarray(vnorms,dtype=numpy.float32)
+
     glEnableClientState (GL_VERTEX_ARRAY)
     glEnableClientState(GL_COLOR_ARRAY)
+    glEnableClientState(GL_NORMAL_ARRAY)
+
     glVertexPointer(3, GL_FLOAT, 0,verts)
     glColorPointer(3, GL_FLOAT, 0,colors)
+    glNormalPointer(GL_FLOAT,0,vnorms)
   
-    """
-    #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
-    f_idx=0
-    for tri in tris:
-            #glNormal3f(*(n[f_idx]))
-            colors=tricols[f_idx]
-            f_idx+=1
-            for k in xrange(3):
-             #k.reverse()
-             #print verts[k]
-             #color = voxels[ints[0],ints[1],ints[2],1:] 
-             #color = hsv_to_rgb(*color) #hsv_to_rgb(color)
-             #print color
-             glColor3f(*colors[k])
-             glVertex3f( *tri[k])
-    """
     faces=numpy.asarray(faces,dtype=numpy.uint)
     glDrawElements(GL_TRIANGLES,faces.flatten().shape[0],GL_UNSIGNED_INT,faces.flatten())
+
     glDisableClientState(GL_VERTEX_ARRAY)
     glDisableClientState(GL_COLOR_ARRAY)
-    #glEnd();
+    glDisableClientState(GL_NORMAL_ARRAY)
     glPopMatrix()
-    # do not render to texture anymore - "switch off" rtt
     out = glReadPixels(0,0,512,512,GL_RGB,GL_FLOAT)
+
     return out
 
 if (__name__=='__main__'):
-  sz_x = 10
-  sz_y = 20
-  sz_z = 10
+  sz_x = 20 #10
+  sz_y = 20 #20
+  sz_z = 20 #10
 
   coords = 5
   coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords))
@@ -178,7 +196,8 @@ if (__name__=='__main__'):
   voxels = numpy.zeros((tot_vox,4))
   for val in xrange(tot_vox):
      voxels[val,0] = sum( (coordinates[val,1:])**2 )
-     voxels[val,1:] = np.random.random((3)) #((1.0 - coordinates[val,1])+(coordinates[val,2]**2))/2.0 #np.random.random((3))
+     voxels[val,1:] = np.ones((3)) #np.random.random((3)) #((1.0 - coordinates[val,1])+(coordinates[val,2]**2))/2.0 #np.random.random((3))
+     #voxels[val,1:] = np.random.random((3)) #((1.0 - coordinates[val,1])+(coordinates[val,2]**2))/2.0 #np.random.random((3))
   voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
 
   import pylab as plt
@@ -186,7 +205,8 @@ if (__name__=='__main__'):
   plt.show()
   ang=0
   while True:
-   out = render(voxels,ang,ang)
+   print ang%128
+   out = render(voxels,[0.5,0.5,0.5],ang,0,shiny=ang%128) #ang) #,shiny=ang%128)
    ang+=5
    plt.clf()
    plt.ion()

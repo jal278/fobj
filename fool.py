@@ -1,7 +1,6 @@
 import pyximport; pyximport.install()
-
-#!/usr/bin/python3
 import numpy
+import math
 import os
 import sys
 import time
@@ -10,7 +9,9 @@ import numpy as np
 import cPickle
 import pickle as pickle
 import MultiNEAT as NEAT
+
 NEAT.import_array()
+
 import matplotlib
 matplotlib.use('gtkagg')
 import pylab as plt
@@ -21,8 +22,17 @@ from image_rec import run_image
 from melites import melites 
 from fool_eval import evaluate
 
-target_class = 682
+def load_niche_matrix(dummy=False):
+ if dummy:
+  niche_names = [k[:50] for k in image_rec.labels]
+  niche_matrix = np.identity(1000)
+  return niche_matrix,niche_names
+ else:
+  return cPickle.load(open("nodecalc/niche_calc.pkl","rb"))
+  
+niche_matrix,niche_names=load_niche_matrix()
 
+target_class = 682
 sz_x = 20
 sz_y = 20
 sz_z = 20
@@ -37,7 +47,7 @@ z_grad = numpy.linspace(-1,1,sz_z)
 for _x in xrange(sz_x):
  for _y in xrange(sz_y):
   for _z in xrange(sz_z):
-   coordinates[_x,_y,_z,0]=1.0 #x_grad[_x]
+   coordinates[_x,_y,_z,0]=1.0 
    coordinates[_x,_y,_z,1]=x_grad[_x]
    coordinates[_x,_y,_z,2]=y_grad[_y]
    coordinates[_x,_y,_z,3]=z_grad[_z]
@@ -47,7 +57,9 @@ for _x in xrange(sz_x):
 coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
 
 def evaluate(genome,debug=False,save=None):
+    lighting=True
     verbose=True
+
     if verbose:
      print 'building...'
 
@@ -56,15 +68,17 @@ def evaluate(genome,debug=False,save=None):
 
     if verbose:
      print 'dcalc'
-    #genome.CalculateDepth()
+
+    genome.CalculateDepth()
     if verbose:
      print 'dcalc complete'
+    depth = genome.GetDepth()
 
-    #depth = genome.GetDepth()
-    depth=6
+    #fixed depth for now...
+    #depth=6
+
 
     error = 0
-
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
     voxels = numpy.zeros((tot_vox,4))
@@ -72,19 +86,7 @@ def evaluate(genome,debug=False,save=None):
     print "calling batch...", genome.NumNeurons()
     voxels = net.Batch_input(coordinates,depth)
     print "complete"
-    """
-    if verbose:
-     print 'generating voxels...'
-    for val in xrange(tot_vox):
-     net.Flush()
-     net.Input(coordinates[val]) #np.array([1., 0., 1.])) # can input numpy arrays, too
-                                      # for some reason only np.float64 is supported
-     for _ in xrange(depth):
-        net.Activate()
 
-     o = net.Output()
-     voxels[val,:]=o
-    """
     voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
     thresh=0.5
     voxels[0,:,:,0]=thresh-0.01
@@ -97,29 +99,45 @@ def evaluate(genome,debug=False,save=None):
     voxels[:,:,-1,0]=thresh-0.01
 
     bg_color = [net.neurons[k].time_const for k in range(3)]
+    oparam = np.clip([net.neurons[k].bias for k in range(3)],0,1)
     print bg_color 
+    print oparam
+
     if verbose:
      print 'rendering images'
-    angle_interval=45
-    img1 = render(voxels,bg_color,0,0,save=save) 
-    img2 = render(voxels,bg_color,45,5) 
-    img3 = render(voxels,bg_color,90,0) 
-    img4 = render(voxels,bg_color,135,5) 
-    img5 = render(voxels,bg_color,180,0)
-    img6 = render(voxels,bg_color,225,5)
+
+    theta=45
+    jitter=5
+
+    shiny = oparam[0]*128
+    spec = oparam[1]
+    amb = oparam[2]
+
+    img1 = render(voxels,bg_color,0,0,save=save,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
+    img2 = render(voxels,bg_color,theta,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
+    img3 = render(voxels,bg_color,theta*2,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
+    img4 = render(voxels,bg_color,theta*3,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
+    img5 = render(voxels,bg_color,theta*4,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting)
+    img6 = render(voxels,bg_color,theta*5,jitter,spec=spec,amb=amb,lighting=lighting)
+
     imgs = [img1,img2,img3,img4,img5,img6]
 
-    #plt.imshow(img)
-    #plt.show()
     if verbose:
      print 'running image rec'
+
     results = run_image(imgs)  
 
     if debug:
      return imgs,results
-    results = results.prod(axis=0)
-    return float(results[target_class]),results #voxels.flatten().sum()
 
+    results = results.prod(axis=0)
+    
+    niche_computation = np.dot(results,niche_matrix.T)
+    print niche_computation.shape
+
+    return float(results[target_class]),results 
+
+#NEAT setup
 params = NEAT.Parameters()
 params.PopulationSize = 50
 params.DynamicCompatibility = True
@@ -170,46 +188,63 @@ params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
-if True:
- to_load = "fool100.pkl"
+ 
+if False:
+ #to_load = "fool100.pkl"
+ to_load = "fool45.pkl"
  stuff = cPickle.load(open(to_load,"rb"))
- plt.figure(figsize=(14,20))
+ plt.figure(figsize=(16,22))
  plt.ion()
 
- sort_list=zip(stuff[0],range(1000))
+ num_niches= len(niche_names)
+ sort_list=zip(stuff[0],range(num_niches))
  sort_list.sort(reverse=True)
+
  for k in sort_list[:50]:
-  print k,image_rec.labels[k[1]][:30]
+  print k,niche_names[k[1]]
+
  raw_input()
- for idx in range(0,1000):
-  print image_rec.labels[idx][:50],stuff[0][idx]
-  imgs,res = evaluate(stuff[1][idx],debug=True,save="out/out%d.ply"%idx) 
+
+ for _idx in range(0,num_niches):
+  idx = sort_list[_idx][1]
+  print niche_names[idx],stuff[0][idx]
+  imgs,res = evaluate(stuff[1][idx],debug=True,save="out/out%d.ply"%_idx) 
   plt.clf()
 
   fig = plt.gcf()
-  fig.suptitle(image_rec.labels[idx][:30])
+  fig.suptitle(niche_names[idx][:30])
   subfig=1
-  t_imgs = len(imgs)
+  t_imgsx = (math.ceil(float(len(imgs)/3)))
+  t_imgsy = 3
+  
   for img in imgs:
-         plt.subplot(t_imgs,1,subfig)
+         plt.subplot(t_imgsx,t_imgsy,subfig)
          plt.title("Confidence: %0.2f%%" % (res[subfig-1,idx]*100.0))
          plt.imshow(img)
          subfig+=1
   plt.draw()
   plt.pause(0.1)
-  plt.savefig("out/out%d.png"%idx)
+  plt.savefig("out/out%d.png"%_idx)
  print "done.."
- asdf 
+ exit()
+rng=NEAT.RNG()
 
+#genome generator
 def generator(): 
-     return NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
+     global rng
+     g= NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
+     g.RandomizeParameters(rng)
+     return g
 
+#wrapper to call map elites
 def mapelites(seed,evals,seed_evals,cpi):
-    i = seed
-
-    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True)
+    global rng
+    rng.Seed(seed)
+ 
+    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True,seed=seed)
     run.do_evals(evals) 
 
+#if you want to do objective-driven search
 def objective_driven(seed):
     i = seed
     g = NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
@@ -247,28 +282,13 @@ def objective_driven(seed):
 
     return generations
 
-gens = []
+obj=False
+seed=10
 
-for run in range(1):
+if __name__=='__main__':
     obj=False 
     if obj:
-     gen = objective_driven(run)
+     gen = objective_driven(seed)
     else:
-     gen = mapelites(run,2000000,200,10000) #getbest(run)
-    print('Run:', run, 'Generations to solve XOR:', gen)
-    gens += [gen]
+     gen = mapelites(seed,2000000,200,10000) #getbest(run)
 
-"""
-with ProcessPoolExecutor(max_workers=8) as executor:
-    fs = [executor.submit(getbest, x) for x in range(1000)]
-    for i,f in enumerate(as_completed(fs)):
-        gen = f.result()
-        print('Run:', i, 'Generations to solve XOR:', gen)
-        gens += [gen]
-
-avg_gens = sum(gens) / len(gens)
-
-print('All:', gens)
-print('Average:', avg_gens)
-
-"""
