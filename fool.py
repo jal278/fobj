@@ -241,7 +241,7 @@ def mapelites(seed,evals,seed_evals,cpi):
     global rng
     rng.Seed(seed)
  
-    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True,seed=seed)
+    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True,seed=seed,history=True)
     run.do_evals(evals) 
 
 #if you want to do objective-driven search
@@ -291,4 +291,3 @@ if __name__=='__main__':
      gen = objective_driven(seed)
     else:
      gen = mapelites(seed,2000000,200,10000) #getbest(run)
-

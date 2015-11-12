@@ -82,15 +82,19 @@ def evaluate(genome):
      behavior[x]=t
     return (4 - error)**2,behavior
 
-class melites:
-  def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000):
+import networkx as nx
 
+class melites:
+  def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000,history=False):
+    self.do_history=history    
+    self.history = nx.MultiDiGraph()
     self.generator=generator
     self.params= params
     self.evaluate = evaluate
     self.seed_evals = seed_evals
     self.checkpoint = checkpoint
     self.checkpoint_interval = checkpoint_interval
+
     g= generator()
 
     pop = NEAT.Population(g, params, True, 1.0, seed)
@@ -116,9 +120,12 @@ class melites:
     for x in xrange(num):
      if x%10000==0:
       print 'eval %d' % x
+
      if self.checkpoint and ((self.evals+1)%self.checkpoint_interval==0):
-      cPickle.dump([self.elite_score,self.elite_map,self.evals],open("fool%d.pkl"%self.checkpt_counter,"wb"))
+      cPickle.dump([self.elite_score,self.elite_map,self.evals,self.history],open("fool%d.pkl"%self.checkpt_counter,"wb"))
       self.checkpt_counter+=1
+     parent=None
+     parent_niche=None
      niche=None
      if x<self.seed_evals:
       new_baby = self.generator()
@@ -131,7 +138,9 @@ class melites:
       niche = numpy.random.choice(r_indx,p=p) #random.randint(0,self.behavior_shape-1)
       if self.greedy:
         self.tries[niche]-=1
-      new_baby = NEAT.Genome(self.elite_map[niche])
+      parent=self.elite_map[niche]
+      parent_niche=niche
+      new_baby = NEAT.Genome(parent)
       self.species.MutateGenome(False,self.pop,new_baby,self.params,self.pop.RNG)
 
      _,behavior = self.evaluate(new_baby)
@@ -142,11 +151,22 @@ class melites:
       self.tries[niche]=self.reset_tries
 
      for idx in to_update:  
-      if idx in self.elite_map:
+
+      if not self.do_history and idx in self.elite_map:
        self.elite_map[idx].Destroy()
+
       old_score = self.elite_score[idx]
       self.elite_score[idx]=behavior[idx]
-      self.elite_map[idx]=NEAT.Genome(new_baby)
+      cloned_baby= NEAT.Genome(new_baby)
+      self.elite_map[idx]=cloned_baby
+
+      if self.do_history:
+       if parent!=None:
+        if parent not in self.history:
+         self.history.add_node(parent)
+        self.history.add_node(cloned_baby)
+        self.history.add_edge(parent,cloned_baby,source_niche=parent_niche,target_niche=idx,old_score=old_score,new_score=behavior[idx])
+
       if old_score*1.05 < behavior[idx]:
        self.tries[idx]=self.reset_tries
      
