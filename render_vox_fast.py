@@ -37,7 +37,7 @@ def normalize_v3(arr):
     arr[:,2] /= lens                
     return arr
 
-def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,spec=1.0,shiny=100,lighting=True):
+def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,spec=1.0,shiny=100,lighting=True,diff=0.5):
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
  #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
@@ -68,22 +68,34 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,s
 
     glShadeModel(GL_SMOOTH)
 
+
+    if lighting:
+     glEnable(GL_COLOR_MATERIAL)
+     glEnable(GL_LIGHTING)
+     glEnable(GL_LIGHT0)
+     glEnable(GL_LIGHT1)
+     glEnable(GL_LIGHT2)
+
+     light=diff
+     glLightfv(GL_LIGHT0, GL_DIFFUSE, [light,light,light,1.0])
+     glLightfv(GL_LIGHT1, GL_DIFFUSE, [light,light,light,1.0])
+     glLightfv(GL_LIGHT2, GL_DIFFUSE, [light,light,light,1.0]) 
+
+     glColorMaterial(GL_FRONT,GL_AMBIENT_AND_DIFFUSE)
+     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [amb,amb,amb,1.0]);
+     glMaterialfv(GL_FRONT, GL_SPECULAR, [spec,spec,spec]);
+     glMaterialfv(GL_FRONT, GL_SHININESS, shiny);
+
+     glLightfv(GL_LIGHT0, GL_POSITION, [0.0,2.0,-1.0,0.0]);
+     glLightfv(GL_LIGHT1, GL_POSITION, [10.0,-5.0,20.0,0.0]);
+     glLightfv(GL_LIGHT2, GL_POSITION, [-10.0,0.0,10.0,0.0]);
+
     glPushMatrix()
     glRotatef (angle1, 0.0, 1.0, 0.0); 
     glRotatef (angle2, 0.1, 0.0, 0.0); 
 
     glEnable(GL_CULL_FACE)
     glEnable(GL_DEPTH_TEST)
-
-    if lighting:
-     glEnable(GL_COLOR_MATERIAL)
-     glEnable(GL_LIGHTING)
-     glEnable(GL_LIGHT0)
-     glColorMaterial(GL_FRONT,GL_AMBIENT_AND_DIFFUSE)
-     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [amb,amb,amb,1.0]);
-     glMaterialfv(GL_FRONT, GL_SPECULAR, [spec,spec,spec]);
-     glMaterialfv(GL_FRONT, GL_SHININESS, shiny);
-     glLightfv(GL_LIGHT0, GL_POSITION, [0.0,2.0,-1.0,0.0]);
 
 
 
@@ -101,7 +113,6 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,s
     #lightZeroPosition = [0.,50.,-2.,1.]
     #lightZeroColor = [1.8,1.0,0.8,1.0] #green tinged
     #glLightfv(GL_LIGHT0, GL_POSITION, lightZeroPosition)
-    #glLightfv(GL_LIGHT0, GL_DIFFUSE, lightZeroColor)
     #glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.1)
     #glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.05)
     #glEnable(GL_LIGHT0)
@@ -206,8 +217,9 @@ if (__name__=='__main__'):
   ang=0
   while True:
    print ang%128
-   out = render(voxels,[0.5,0.5,0.5],ang,0,shiny=ang%128) #ang) #,shiny=ang%128)
-   ang+=5
+   out = render(voxels,[0.5,0.5,0.5],ang,0,shiny=50) #ang) #,shiny=ang%128)
+   print out.shape
+   ang+=15
    plt.clf()
    plt.ion()
    plt.imshow(out)

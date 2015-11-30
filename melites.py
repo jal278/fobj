@@ -80,7 +80,7 @@ def evaluate(genome):
      for element in combos[x]:
       t+=cases[element]
      behavior[x]=t
-    return (4 - error)**2,behavior
+    return (4 - error)**2,behavior,None
 
 import networkx as nx
 
@@ -103,7 +103,7 @@ class melites:
     self.pop= pop
     self.species = pop.Species[0]
 
-    _,beh = evaluate(g)
+    _,beh,extra = evaluate(g)
     g.Destroy() 
    
     self.behavior_shape = beh.shape[0]
@@ -111,6 +111,7 @@ class melites:
     self.tries = numpy.ones(self.behavior_shape)*self.reset_tries
     self.elite_score = -numpy.ones(self.behavior_shape)
     self.elite_map = {}
+    self.elite_extra = {}
     self.evals=0
     self.checkpt_counter=0
     self.greedy=True
@@ -118,12 +119,14 @@ class melites:
   def do_evals(self,num):
     r_indx = numpy.array(range(self.behavior_shape),dtype=int)
     for x in xrange(num):
+
      if x%10000==0:
       print 'eval %d' % x
 
      if self.checkpoint and ((self.evals+1)%self.checkpoint_interval==0):
       cPickle.dump([self.elite_score,self.elite_map,self.evals,self.history],open("fool%d.pkl"%self.checkpt_counter,"wb"))
       self.checkpt_counter+=1
+
      parent=None
      parent_niche=None
      niche=None
@@ -136,14 +139,16 @@ class melites:
       print "pos p:", np.nonzero(self.tries>0)[0].shape    
       p=self.tries[r_indx]/self.tries.sum()
       niche = numpy.random.choice(r_indx,p=p) #random.randint(0,self.behavior_shape-1)
+
       if self.greedy:
         self.tries[niche]-=1
+
       parent=self.elite_map[niche]
       parent_niche=niche
       new_baby = NEAT.Genome(parent)
       self.species.MutateGenome(False,self.pop,new_baby,self.params,self.pop.RNG)
 
-     _,behavior = self.evaluate(new_baby)
+     _,behavior,extra = self.evaluate(new_baby)
      to_update = np.nonzero(behavior>self.elite_score)[0]
      improve = np.any(behavior>(1.05*self.elite_score))
 
@@ -159,6 +164,7 @@ class melites:
       self.elite_score[idx]=behavior[idx]
       cloned_baby= NEAT.Genome(new_baby)
       self.elite_map[idx]=cloned_baby
+      self.elite_extra[idx]=extra
 
       if self.do_history:
        if parent!=None:
@@ -172,7 +178,8 @@ class melites:
      
      new_baby.Destroy()  
      self.evals+=1   
-    return self.elite_score,self.elite_map
+
+    return self.elite_score,self.elite_map,self.elite_extra
 
 def hillclimb(g,params,evals,evaluate,seed=1):
     pop = NEAT.Population(g, params, True, 1.0, seed)

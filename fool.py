@@ -22,20 +22,58 @@ from image_rec import run_image
 from melites import melites 
 from fool_eval import evaluate
 
+from clint.arguments import Args
+args = Args()
+arg_dict = dict(args.grouped)
+
+seed=10
+save_interval=10000
+post_hoc = False
+load_file = None
+wordnet_niches = False
+modeltype="3d"
+
+#argument processing
+if '--seed' in arg_dict:
+ seed=int(arg_dict['--seed'][0])
+else:
+ import time
+ seed=time.time()
+
+if '--save_interval' in arg_dict:
+ save_interval=int(arg_dict['--save_interval'][0])
+ 
+if '--process' in arg_dict:
+ post_hoc=True
+ load_file=arg_dict['--process'][0]
+
+if '--wordnet' in arg_dict:
+ wordnet_niches=True
+
+if '--2d' in arg_dict:
+ modeltype="2d"
+
 def load_niche_matrix(dummy=False):
  if dummy:
+  print "loading dummy..."
   niche_names = [k[:50] for k in image_rec.labels]
   niche_matrix = np.identity(1000)
   return niche_matrix,niche_names
  else:
   return cPickle.load(open("nodecalc/niche_calc.pkl","rb"))
-  
-niche_matrix,niche_names=load_niche_matrix()
+ 
+niche_matrix,niche_names=load_niche_matrix(not wordnet_niches)
 
 target_class = 682
+
 sz_x = 20
 sz_y = 20
 sz_z = 20
+
+if modeltype=="2d":
+ sz_x = 128
+ sz_y = 128
+ sz_z = 1 
 
 coords = 6
 coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords),dtype=np.double)
@@ -55,6 +93,52 @@ for _x in xrange(sz_x):
    coordinates[_x,_y,_z,5]=x_grad[_x]**2+z_grad[_z]**2
 
 coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
+
+#JOELNOTE: TODO setup standard image-based cppn setup...
+def evaluate_pic(genome,debug=False,save=None):
+    verbose=True
+    net = NEAT.NeuralNetwork()
+    genome.BuildPhenotype(net)
+
+    if verbose:
+     print 'dcalc'
+
+    genome.CalculateDepth()
+    if verbose:
+     print 'dcalc complete'
+    depth = genome.GetDepth()
+
+    error = 0
+    # do stuff and return the fitness
+    tot_vox = sz_x*sz_y*sz_z
+    voxels = numpy.zeros((tot_vox,4))
+
+    print "calling batch...", genome.NumNeurons()
+    voxels = net.Batch_input(coordinates,depth)
+    print "complete"
+
+    voxels = voxels.reshape((sz_x,sz_y,4))
+    voxels = voxels[:,:,:3] 
+    imgs = [voxels] 
+    
+    if verbose:
+     print 'running image rec'
+
+    results,behavior = run_image(imgs)  
+    print "behavior shape: ", behavior.shape
+    #print results.shape
+    #print niche_matrix.T.shape
+    results=np.dot(results,niche_matrix.T)
+    full_matrix = results.copy()
+
+    if debug:
+     return imgs,results
+
+    results = results[0,:] #results.prod(axis=0)
+    
+    print results.shape
+
+    return float(results[target_class]),results,full_matrix
 
 def evaluate(genome,debug=False,save=None):
     lighting=True
@@ -99,7 +183,7 @@ def evaluate(genome,debug=False,save=None):
     voxels[:,:,-1,0]=thresh-0.01
 
     bg_color = [net.neurons[k].time_const for k in range(3)]
-    oparam = np.clip([net.neurons[k].bias for k in range(3)],0,1)
+    oparam = np.clip([net.neurons[k].bias for k in range(4)],0,1)
     print bg_color 
     print oparam
 
@@ -112,31 +196,39 @@ def evaluate(genome,debug=False,save=None):
     shiny = oparam[0]*128
     spec = oparam[1]
     amb = oparam[2]
+    diff = oparam[3]
 
-    img1 = render(voxels,bg_color,0,0,save=save,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
-    img2 = render(voxels,bg_color,theta,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
-    img3 = render(voxels,bg_color,theta*2,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
-    img4 = render(voxels,bg_color,theta*3,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting) 
-    img5 = render(voxels,bg_color,theta*4,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting)
-    img6 = render(voxels,bg_color,theta*5,jitter,spec=spec,amb=amb,lighting=lighting)
+
+    img1 = render(voxels,bg_color,0,0,save=save,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
+    img2 = render(voxels,bg_color,theta,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
+    img3 = render(voxels,bg_color,theta*2,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
+    img4 = render(voxels,bg_color,theta*3,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
+    img5 = render(voxels,bg_color,theta*4,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff)
+    img6 = render(voxels,bg_color,theta*5,jitter,spec=spec,amb=amb,lighting=lighting,diff=diff)
 
     imgs = [img1,img2,img3,img4,img5,img6]
 
     if verbose:
      print 'running image rec'
 
-    results = run_image(imgs)  
+    results,beh = run_image(imgs)  
+    #print niche_matrix.T.shape
+    results=np.dot(results,niche_matrix.T)
+    full_matrix = results.copy()
 
     if debug:
      return imgs,results
 
     results = results.prod(axis=0)
     
-    niche_computation = np.dot(results,niche_matrix.T)
-    print niche_computation.shape
+    print results.shape
 
-    return float(results[target_class]),results 
+    return float(results[target_class]),results,full_matrix
 
+if(modeltype=='2d'):
+ evaluate=evaluate_pic
+ image_rec.set_batch_size(1)
+ 
 #NEAT setup
 params = NEAT.Parameters()
 params.PopulationSize = 50
@@ -174,7 +266,6 @@ params.MinActivationA = 0.05;
 params.MaxActivationA = 6.0;
 
 params.MutateNeuronActivationTypeProb = 0.03;
-
 params.ActivationFunction_SignedSigmoid_Prob = 1.0;
 params.ActivationFunction_UnsignedSigmoid_Prob = 0.0;
 params.ActivationFunction_Tanh_Prob = 0.0;
@@ -188,10 +279,33 @@ params.ActivationFunction_SignedSine_Prob = 1.0;
 params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
+
+def save_render_plot(imgs,label,save=None,res_vec=None):
+  plt.clf()
+  fig = plt.gcf()
+  fig.suptitle(label)
+
+  subfig=1
+  t_imgsx = (math.ceil(float(len(imgs))/3))
+  t_imgsy = min(3,len(imgs))
+  
+  for img in imgs:
+         plt.subplot(t_imgsx,t_imgsy,subfig)
+         plt.title("Confidence: %0.2f%%" % (res_vec[subfig-1]*100.0))
+         plt.imshow(img)
+         subfig+=1
+
+  if save!=None:
+   plt.draw()
+   plt.pause(0.1)
+   plt.savefig(save)
+  else:
+   plt.show()
+   
  
-if False:
+if post_hoc:
  #to_load = "fool100.pkl"
- to_load = "fool45.pkl"
+ to_load = load_file
  stuff = cPickle.load(open(to_load,"rb"))
  plt.figure(figsize=(16,22))
  plt.ion()
@@ -200,7 +314,7 @@ if False:
  sort_list=zip(stuff[0],range(num_niches))
  sort_list.sort(reverse=True)
 
- for k in sort_list[:50]:
+ for k in sort_list[:100]:
   print k,niche_names[k[1]]
 
  raw_input()
@@ -209,26 +323,11 @@ if False:
   idx = sort_list[_idx][1]
   print niche_names[idx],stuff[0][idx]
   imgs,res = evaluate(stuff[1][idx],debug=True,save="out/out%d.ply"%_idx) 
-  plt.clf()
-
-  fig = plt.gcf()
-  fig.suptitle(niche_names[idx][:30])
-  subfig=1
-  t_imgsx = (math.ceil(float(len(imgs)/3)))
-  t_imgsy = 3
-  
-  for img in imgs:
-         plt.subplot(t_imgsx,t_imgsy,subfig)
-         plt.title("Confidence: %0.2f%%" % (res[subfig-1,idx]*100.0))
-         plt.imshow(img)
-         subfig+=1
-  plt.draw()
-  plt.pause(0.1)
-  plt.savefig("out/out%d.png"%_idx)
+  save_render_plot(imgs,str(idx)+" "+niche_names[idx][:30],res_vec=res[:,idx],save="out/out%d.png"%_idx)
  print "done.."
  exit()
-rng=NEAT.RNG()
 
+rng=NEAT.RNG()
 #genome generator
 def generator(): 
      global rng
@@ -283,11 +382,10 @@ def objective_driven(seed):
     return generations
 
 obj=False
-seed=10
 
 if __name__=='__main__':
     obj=False 
     if obj:
      gen = objective_driven(seed)
     else:
-     gen = mapelites(seed,2000000,200,10000) #getbest(run)
+     gen = mapelites(seed,2000000,200,save_interval) #getbest(run)
