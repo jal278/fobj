@@ -21,7 +21,7 @@ import os
 import sys
 import time
 import random as rnd
-import cv2
+#import cv2
 import numpy as np
 import pickle as pickle
 
