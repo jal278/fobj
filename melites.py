@@ -84,12 +84,89 @@ def evaluate(genome):
 
 import networkx as nx
 
+class novsearch:
+  def __init__(self,g,params,evaluate,seed=1,checkpoint=False,checkpoint_interval=10):
+   self.archive=[]
+   self.garchive=[]
+   self.evaluate=evaluate
+   self.pop = NEAT.Population(g, params, True, 1.0, seed)
+   self.pop.RNG.Seed(seed)
+   self.checkpoint=checkpoint
+   self.ci = checkpoint_interval
+   self.checkpt_counter=0
+
+  def do_gens(self,gens):
+   evaluate=self.evaluate
+   generations = 0
+   pop=self.pop
+   for generation in range(gens):
+        genome_list = NEAT.GetGenomeList(pop)
+        fitness_list=[]
+        behavior_list=[]
+        for genome in genome_list:
+         novb,beh,extra = evaluate(genome) 
+         novb=np.sqrt(novb.mean(axis=0).flatten())
+         print novb.max(),novb.min()
+         print novb.shape
+         behavior_list.append(novb)
+
+        if True:
+         print "calculating novelty..."
+         behaviors = behavior_list
+         fitness_list = []
+
+         for k in behavior_list:
+          fitness_list.append(calc_novelty(k,behaviors,self.archive))
+
+         idx = random.randint(0,len(behaviors)-1)
+         self.archive.append(behaviors[idx])
+         self.garchive.append(NEAT.Genome(genome_list[idx]))
+
+        NEAT.ZipFitness(genome_list, fitness_list)
+       
+        if self.checkpoint and generation%self.ci==0:
+         print "saving..."
+         glist = [k for k in genome_list]
+         #to_save = [self.garchive,self.archive,glist,behavior_list]
+         to_save = [self.archive,self.garchive,glist,behavior_list]
+         cPickle.dump(to_save,open("nov%d.pkl"%self.checkpt_counter,"wb"))
+         self.checkpt_counter+=1       
+         print "done!"
+ 
+        """ 
+        # test
+        net = NEAT.NeuralNetwork()
+        champ=pop.Species[0].GetLeader()
+        champ.BuildPhenotype(net)
+        #evaluate(champ,False)
+        if vis: 
+         img = np.zeros((500, 500, 3), dtype=np.uint8)
+         img += 10
+         NEAT.DrawPhenotype(img, (0, 0, 500, 500), net )
+         cv2.imshow("nn_win", img)
+         cv2.waitKey(1000)
+        """
+
+        print "before epoch"
+        pop.Epoch()
+        print "after epoch"
+        generations = generation
+
+def calc_novelty(b,behaviors,archive):
+   b=numpy.array(b)
+   beh=numpy.array(archive+behaviors)
+   beh-=b
+   beh*=beh
+   beh=beh.sum(1)
+   beh.sort()
+   return beh[:15].sum()+0.00001
+
 class melites:
   def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000,history=False):
-    self.do_history=history    
+    self.do_history = history    
     self.history = nx.MultiDiGraph()
-    self.generator=generator
-    self.params= params
+    self.generator = generator
+    self.params = params
     self.evaluate = evaluate
     self.seed_evals = seed_evals
     self.checkpoint = checkpoint
@@ -115,6 +192,7 @@ class melites:
     self.evals=0
     self.checkpt_counter=0
     self.greedy=True
+    self.plots=[]
 
   def do_evals(self,num):
     r_indx = numpy.array(range(self.behavior_shape),dtype=int)
@@ -124,7 +202,13 @@ class melites:
       print 'eval %d' % x
 
      if self.checkpoint and ((self.evals+1)%self.checkpoint_interval==0):
-      cPickle.dump([self.elite_score,self.elite_map,self.evals,self.history],open("fool%d.pkl"%self.checkpt_counter,"wb"))
+      agg_data = []
+      for k in range(self.elite_score.shape[0]):
+       agg_data.append(self.elite_extra[k])
+      agg_data = numpy.array(agg_data)
+      self.plots.append(agg_data)
+      
+      cPickle.dump([self.elite_score,self.elite_map,self.evals,self.history,self.elite_extra,self.plots],open("fool%d.pkl"%self.checkpt_counter,"wb"))
       self.checkpt_counter+=1
 
      parent=None
@@ -155,28 +239,38 @@ class melites:
      if niche!=None and improve:
       self.tries[niche]=self.reset_tries
 
+     nosave=True
      for idx in to_update:  
 
+      baby= new_baby
       if not self.do_history and idx in self.elite_map:
        self.elite_map[idx].Destroy()
+       baby= NEAT.Genome(new_baby)
+      else:
+       nosave=False
 
       old_score = self.elite_score[idx]
       self.elite_score[idx]=behavior[idx]
-      cloned_baby= NEAT.Genome(new_baby)
-      self.elite_map[idx]=cloned_baby
-      self.elite_extra[idx]=extra
+      
+      self.elite_map[idx]=baby
+      self.elite_extra[idx]=extra[:,idx]
 
       if self.do_history:
+       if baby not in self.history:
+        self.history.add_node(baby)
+
        if parent!=None:
         if parent not in self.history:
          self.history.add_node(parent)
-        self.history.add_node(cloned_baby)
-        self.history.add_edge(parent,cloned_baby,source_niche=parent_niche,target_niche=idx,old_score=old_score,new_score=behavior[idx])
+
+        self.history.add_edge(parent,baby,source_niche=parent_niche,target_niche=idx,old_score=old_score,new_score=behavior[idx])
 
       if old_score*1.05 < behavior[idx]:
        self.tries[idx]=self.reset_tries
-     
-     new_baby.Destroy()  
+
+     if nosave:     
+      new_baby.Destroy()  
+
      self.evals+=1   
 
     return self.elite_score,self.elite_map,self.elite_extra
@@ -208,7 +302,7 @@ def hillclimb(g,params,evals,evaluate,seed=1):
 
 if(__name__=='__main__'):
 	params = NEAT.Parameters()
-	params.PopulationSize = 150
+	params.PopulationSize = 500
 	params.DynamicCompatibility = True
 	params.WeightDiffCoeff = 4.0
 	params.CompatTreshold = 2.0

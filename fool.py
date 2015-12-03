@@ -20,6 +20,7 @@ from render_vox_fast import render
 import image_rec
 from image_rec import run_image 
 from melites import melites 
+from melites import novsearch
 from fool_eval import evaluate
 
 from clint.arguments import Args
@@ -39,6 +40,11 @@ if '--seed' in arg_dict:
 else:
  import time
  seed=time.time()
+
+run_length = 200000
+
+if '--run_length' in arg_dict:
+ run_length=int(arg_dict['--run_length']) 
 
 if '--save_interval' in arg_dict:
  save_interval=int(arg_dict['--save_interval'][0])
@@ -65,7 +71,6 @@ def load_niche_matrix(dummy=False):
 niche_matrix,niche_names=load_niche_matrix(not wordnet_niches)
 
 target_class = 682
-
 sz_x = 20
 sz_y = 20
 sz_z = 20
@@ -161,7 +166,6 @@ def evaluate(genome,debug=False,save=None):
     #fixed depth for now...
     #depth=6
 
-
     error = 0
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
@@ -198,7 +202,6 @@ def evaluate(genome,debug=False,save=None):
     amb = oparam[2]
     diff = oparam[3]
 
-
     img1 = render(voxels,bg_color,0,0,save=save,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
     img2 = render(voxels,bg_color,theta,jitter,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
     img3 = render(voxels,bg_color,theta*2,0,shiny=shiny,spec=spec,amb=amb,lighting=lighting,diff=diff) 
@@ -223,7 +226,7 @@ def evaluate(genome,debug=False,save=None):
     
     print results.shape
 
-    return float(results[target_class]),results,full_matrix
+    return beh,results,full_matrix
 
 if(modeltype=='2d'):
  evaluate=evaluate_pic
@@ -231,8 +234,9 @@ if(modeltype=='2d'):
  
 #NEAT setup
 params = NEAT.Parameters()
-params.PopulationSize = 50
+params.PopulationSize = 500
 params.DynamicCompatibility = True
+params.SurvivalRate = 0.75
 params.WeightDiffCoeff = 4.0
 params.CompatTreshold = 2.0
 params.YoungAgeTreshold = 15
@@ -291,7 +295,8 @@ def save_render_plot(imgs,label,save=None,res_vec=None):
   
   for img in imgs:
          plt.subplot(t_imgsx,t_imgsy,subfig)
-         plt.title("Confidence: %0.2f%%" % (res_vec[subfig-1]*100.0))
+         if res_vec!=None:
+          plt.title("Confidence: %0.2f%%" % (res_vec[subfig-1]*100.0))
          plt.imshow(img)
          subfig+=1
 
@@ -334,6 +339,13 @@ def generator():
      g= NEAT.Genome(0, 6, 0, 4, False, NEAT.ActivationFunction.SIGNED_SIGMOID, NEAT.ActivationFunction.SIGNED_SIGMOID, 0, params)
      g.RandomizeParameters(rng)
      return g
+
+def noveltysearch(seed,gens,cpi):
+    global rng
+    rng.Seed(seed)
+
+    run = novsearch(generator(),params,evaluate,checkpoint=True,checkpoint_interval=cpi)
+    run.do_gens(gens) 
 
 #wrapper to call map elites
 def mapelites(seed,evals,seed_evals,cpi):
@@ -384,8 +396,11 @@ def objective_driven(seed):
 obj=False
 
 if __name__=='__main__':
-    obj=False 
-    if obj:
+    run="nov"
+   
+    if run=="obj":
      gen = objective_driven(seed)
-    else:
+    elif run=="nov":
+     gen = noveltysearch(seed,1000,20)
+    elif run=="me":
      gen = mapelites(seed,2000000,200,save_interval) #getbest(run)
