@@ -4,14 +4,13 @@ import os
 import sys
 import time
 import random as rnd
-import cv2
 import numpy as np
 import numpy
 import random
 import pickle as pickle
 import MultiNEAT as NEAT
 import copy
-from concurrent.futures import ProcessPoolExecutor, as_completed
+#from concurrent.futures import ProcessPoolExecutor, as_completed
 import itertools
 
 def evaluate(genome):
