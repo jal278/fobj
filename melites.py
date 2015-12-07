@@ -173,7 +173,7 @@ class melites:
     self.checkpoint = checkpoint
     self.checkpoint_interval = checkpoint_interval
     self.optimize = optimize
-
+    self.seed=seed
     g= generator()
 
     pop = NEAT.Population(g, params, True, 1.0, seed)
@@ -210,8 +210,8 @@ class melites:
       agg_data = numpy.array(agg_data)
       self.plots.append(agg_data)
       
-      cPickle.dump([self.elite_score,self.elite_map,self.evals,self.history,self.elite_extra,self.plots],open("fool%d.pkl"%self.checkpt_counter,"wb"))
-      self.checkpt_counter+=1
+      cPickle.dump([self.elite_score,self.elite_map,self.evals,self.history,self.elite_extra,self.plots],open("fool%d-%d.pkl"%(self.seed,self.checkpt_counter),"wb"))
+      #self.checkpt_counter+=1
 
      parent=None
      parent_niche=None

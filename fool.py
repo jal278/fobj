@@ -28,7 +28,7 @@ args = Args()
 arg_dict = dict(args.grouped)
 
 seed=10
-save_interval=50000
+save_interval=10000
 post_hoc = False
 load_file = None
 wordnet_niches = False
@@ -405,11 +405,11 @@ def objective_driven(seed):
 obj=False
 
 if __name__=='__main__':
-    run="nov"
+    run="me"
    
     if run=="obj":
      gen = objective_driven(seed)
     elif run=="nov":
      gen = noveltysearch(seed,1000,20)
     elif run=="me":
-     gen = mapelites(seed,2000000,200,save_interval) #getbest(run)
+     gen = mapelites(seed,run_length,500,save_interval) #getbest(run)
