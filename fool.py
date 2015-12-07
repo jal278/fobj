@@ -28,7 +28,7 @@ args = Args()
 arg_dict = dict(args.grouped)
 
 seed=10
-save_interval=10000
+save_interval=50000
 post_hoc = False
 load_file = None
 wordnet_niches = False
@@ -39,9 +39,10 @@ if '--seed' in arg_dict:
  seed=int(arg_dict['--seed'][0])
 else:
  import time
- seed=time.time()
+ seed=int(time.time())
 
-run_length = 200000
+run_length = 250001
+map_opt = False
 
 if '--run_length' in arg_dict:
  run_length=int(arg_dict['--run_length']) 
@@ -55,6 +56,9 @@ if '--process' in arg_dict:
 
 if '--wordnet' in arg_dict:
  wordnet_niches=True
+
+if '--map_opt' in arg_dict:
+ map_opt = True
 
 if '--2d' in arg_dict:
  modeltype="2d"
@@ -354,10 +358,10 @@ def noveltysearch(seed,gens,cpi):
 
 #wrapper to call map elites
 def mapelites(seed,evals,seed_evals,cpi):
-    global rng
+    global rng,map_opt
     rng.Seed(seed)
  
-    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True,seed=seed,history=True)
+    run = melites(generator,params,seed_evals,evaluate,checkpoint_interval=cpi,checkpoint=True,seed=seed,history=True,optimize=map_opt)
     run.do_evals(evals) 
 
 #if you want to do objective-driven search

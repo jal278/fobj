@@ -163,7 +163,7 @@ def calc_novelty(b,behaviors,archive):
    return beh[:25].sum()+0.00001
 
 class melites:
-  def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000,history=False):
+  def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000,history=False,optimize=False):
     self.do_history = history    
     self.history = nx.MultiDiGraph()
     self.generator = generator
@@ -172,6 +172,7 @@ class melites:
     self.seed_evals = seed_evals
     self.checkpoint = checkpoint
     self.checkpoint_interval = checkpoint_interval
+    self.optimize = optimize
 
     g= generator()
 
@@ -185,14 +186,14 @@ class melites:
     g.Destroy() 
    
     self.behavior_shape = beh.shape[0]
-    self.reset_tries=5
+    self.reset_tries=10
     self.tries = numpy.ones(self.behavior_shape)*self.reset_tries
     self.elite_score = -numpy.ones(self.behavior_shape)
     self.elite_map = {}
     self.elite_extra = {}
     self.evals=0
     self.checkpt_counter=0
-    self.greedy=True
+    self.greedy=optimize
     self.plots=[]
 
   def do_evals(self,num):
@@ -234,6 +235,7 @@ class melites:
       self.species.MutateGenome(False,self.pop,new_baby,self.params,self.pop.RNG)
 
      _,behavior,extra = self.evaluate(new_baby)
+     behavior=np.clip(behavior,0.0,1.0)
      to_update = np.nonzero(behavior>self.elite_score)[0]
      improve = np.any(behavior>(1.05*self.elite_score))
 
