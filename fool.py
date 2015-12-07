@@ -176,7 +176,12 @@ def evaluate(genome,debug=False,save=None):
     print "complete"
 
     voxels = voxels.reshape((sz_x,sz_y,sz_z,4))
+
+    percentile = np.clip(net.neurons[5].bias,0,1)
+
     thresh=0.5
+    #thresh=np.percentile(voxels[:,:,:,0],100.0*percentile)
+
     voxels[0,:,:,0]=thresh-0.01
     voxels[-1,:,:,0]=thresh-0.01
 
@@ -236,7 +241,7 @@ if(modeltype=='2d'):
 params = NEAT.Parameters()
 params.PopulationSize = 500
 params.DynamicCompatibility = True
-params.SurvivalRate = 0.75
+params.SurvivalRate = 0.5
 params.WeightDiffCoeff = 4.0
 params.CompatTreshold = 2.0
 params.YoungAgeTreshold = 15
@@ -247,11 +252,11 @@ params.MaxSpecies = 15
 params.RouletteWheelSelection = False
 params.RecurrentProb = 0.0
 params.MutateRemLinkProb = 0.0;
-params.OverallMutationRate = 0.15;
+params.OverallMutationRate = 0.5;
 params.MutateAddLinkProb = 0.13;
 params.MutateAddNeuronProb = 0.03;
 params.MutateWeightsProb = 0.90;
-params.MaxWeight = 6.0;
+params.MaxWeight = 4.0;
 params.WeightMutationMaxPower = 0.2;
 params.WeightReplacementMaxPower = 1.0;
 
@@ -267,7 +272,7 @@ params.MinNeuronBias = 0.0
 params.MutateActivationAProb = 0.05;
 params.ActivationAMutationMaxPower = 0.5;
 params.MinActivationA = 0.05;
-params.MaxActivationA = 6.0;
+params.MaxActivationA = 3.0;
 
 params.MutateNeuronActivationTypeProb = 0.03;
 params.ActivationFunction_SignedSigmoid_Prob = 1.0;

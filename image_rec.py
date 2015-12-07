@@ -1,7 +1,7 @@
 import numpy as np
 # Make sure that caffe is on the python path:
-caffe_root = '/home/joel/code/caffe/'  # this file is expected to be in {caffe_root}/examples
-caffe_root = '/home/ubuntu/caffe/'  # this file is expected to be in {caffe_root}/examples
+caffe_root = '/home/joel/caffe/'  # this file is expected to be in {caffe_root}/examples
+#caffe_root = '/home/ubuntu/caffe/'  # this file is expected to be in {caffe_root}/examples
 import sys
 sys.path.insert(0, caffe_root + 'python')
 

@@ -104,7 +104,9 @@ class novsearch:
         behavior_list=[]
         for genome in genome_list:
          novb,beh,extra = evaluate(genome) 
-         novb=np.sqrt(novb.mean(axis=0).flatten())
+         #novb=np.sqrt(novb.mean(axis=0).flatten())
+         novb=novb/np.linalg.norm(novb)
+
          print novb.max(),novb.min()
          print novb.shape
          behavior_list.append(novb)
@@ -158,7 +160,7 @@ def calc_novelty(b,behaviors,archive):
    beh*=beh
    beh=beh.sum(1)
    beh.sort()
-   return beh[:15].sum()+0.00001
+   return beh[:25].sum()+0.00001
 
 class melites:
   def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000,history=False):
