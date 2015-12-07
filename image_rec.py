@@ -1,10 +1,10 @@
 import numpy as np
 # Make sure that caffe is on the python path:
-caffe_root = '/home/joel/caffe/'  # this file is expected to be in {caffe_root}/examples
-#caffe_root = '/home/ubuntu/caffe/'  # this file is expected to be in {caffe_root}/examples
 import sys
+caffe_root = '/home/joel/caffe/'  # this file is expected to be in {caffe_root}/examples
 sys.path.insert(0, caffe_root + 'python')
-
+caffe_root = '/home/ubuntu/caffe/'  # this file is expected to be in {caffe_root}/examples
+sys.path.insert(0, caffe_root + 'python')
 import caffe
 
 # GPU mode

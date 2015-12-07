@@ -6,8 +6,10 @@ run_range = range(0,5)
 optimization=False
 wordnet=False
 
+os.system("sudo /usr/bin/X :1 &")
+
 for run in run_range:
- cmd = cmd_shell[:]
+ cmd = "DISPLAY=:1 " + cmd_shell[:]
  cmd += " --seed %d" % (run + 1000)
  if optimization:
   cmd += " --map_opt"
