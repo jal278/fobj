@@ -3,8 +3,8 @@ import numpy as np
 import sys
 caffe_root = '/home/joel/caffe/'  # this file is expected to be in {caffe_root}/examples
 sys.path.insert(0, caffe_root + 'python')
-caffe_root = '/home/ubuntu/caffe/'  # this file is expected to be in {caffe_root}/examples
-sys.path.insert(0, caffe_root + 'python')
+#caffe_root = '/home/ubuntu/caffe/'  # this file is expected to be in {caffe_root}/examples
+#sys.path.insert(0, caffe_root + 'python')
 import caffe
 
 # GPU mode

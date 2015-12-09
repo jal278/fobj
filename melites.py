@@ -105,6 +105,7 @@ class novsearch:
         for genome in genome_list:
          novb,beh,extra = evaluate(genome) 
          #novb=np.sqrt(novb.mean(axis=0).flatten())
+         novb=np.hstack([novb.max(axis=0),novb.min(axis=0)]).flatten()
          novb=novb/np.linalg.norm(novb)
 
          print novb.max(),novb.min()
@@ -116,8 +117,9 @@ class novsearch:
          behaviors = behavior_list
          fitness_list = []
 
+         compiled_array=numpy.array(self.archive+behavior_list)
          for k in behavior_list:
-          fitness_list.append(calc_novelty(k,behaviors,self.archive))
+          fitness_list.append(calc_novelty(k,compiled_array))
 
          idx = random.randint(0,len(behaviors)-1)
          self.archive.append(behaviors[idx])
@@ -153,9 +155,10 @@ class novsearch:
         print "after epoch"
         generations = generation
 
-def calc_novelty(b,behaviors,archive):
+def calc_novelty(b,beh):
    b=numpy.array(b)
-   beh=numpy.array(archive+behaviors)
+   beh=beh.copy()
+   #beh=numpy.array(archive+behaviors)
    beh-=b
    beh*=beh
    beh=beh.sum(1)

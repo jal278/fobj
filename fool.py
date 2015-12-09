@@ -11,7 +11,6 @@ import pickle as pickle
 import MultiNEAT as NEAT
 
 NEAT.import_array()
-
 import matplotlib
 matplotlib.use('gtkagg')
 import pylab as plt
@@ -45,7 +44,7 @@ run_length = 250001
 map_opt = False
 
 if '--run_length' in arg_dict:
- run_length=int(arg_dict['--run_length']) 
+ run_length=int(arg_dict['--run_length'][0]) 
 
 if '--save_interval' in arg_dict:
  save_interval=int(arg_dict['--save_interval'][0])
@@ -115,9 +114,10 @@ def evaluate_pic(genome,debug=False,save=None):
     genome.CalculateDepth()
     if verbose:
      print 'dcalc complete'
-    depth = genome.GetDepth()
 
+    depth = genome.GetDepth()
     error = 0
+
     # do stuff and return the fitness
     tot_vox = sz_x*sz_y*sz_z
     voxels = numpy.zeros((tot_vox,4))
