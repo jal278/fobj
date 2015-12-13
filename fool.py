@@ -32,6 +32,8 @@ post_hoc = False
 load_file = None
 wordnet_niches = False
 modeltype="3d"
+lighting=True
+fixed_bg=False
 
 #argument processing
 if '--seed' in arg_dict:
@@ -42,6 +44,12 @@ else:
 
 run_length = 250001
 map_opt = False
+
+if '--fixed_bg' in arg_dict:
+ fixed_bg=True
+
+if '--no_lighting' in arg_dict:
+ lighting=False
 
 if '--run_length' in arg_dict:
  run_length=int(arg_dict['--run_length'][0]) 
@@ -150,7 +158,7 @@ def evaluate_pic(genome,debug=False,save=None):
     return float(results[target_class]),results,full_matrix
 
 def evaluate(genome,debug=False,save=None):
-    lighting=True
+    global lighting
     verbose=True
 
     if verbose:
@@ -196,7 +204,12 @@ def evaluate(genome,debug=False,save=None):
     voxels[:,:,-1,0]=thresh-0.01
 
     bg_color = [net.neurons[k].time_const for k in range(3)]
+
+    if fixed_bg:
+      bg_color=[0.6,0.6,0.6]
+
     oparam = np.clip([net.neurons[k].bias for k in range(4)],0,1)
+
     print bg_color 
     print oparam
 
