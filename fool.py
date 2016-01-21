@@ -206,7 +206,8 @@ def evaluate(genome,debug=False,save=None):
     bg_color = [net.neurons[k].time_const for k in range(3)]
 
     if fixed_bg:
-      bg_color=[0.6,0.6,0.6]
+      #bg_color=[0.6,0.6,0.6]
+      bg_color=[0.4078,0.4575,0.4811]
 
     oparam = np.clip([net.neurons[k].bias for k in range(4)],0,1)
 
