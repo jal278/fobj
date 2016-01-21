@@ -45,6 +45,9 @@ else:
 run_length = 250001
 map_opt = False
 
+if '--run_len' in arg_dict:
+ run_length = int(arg_dict['--run_len'][0])
+
 if '--fixed_bg' in arg_dict:
  fixed_bg=True
 
