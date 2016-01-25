@@ -9,6 +9,8 @@ import numpy as np
 import cPickle
 import pickle as pickle
 import MultiNEAT as NEAT
+import niche_transform
+print "loading..."
 
 NEAT.import_array()
 import matplotlib
@@ -257,7 +259,8 @@ def evaluate(genome,debug=False,save=None):
 if(modeltype=='2d'):
  evaluate=evaluate_pic
  image_rec.set_batch_size(1)
- 
+
+print "neat setup..." 
 #NEAT setup
 params = NEAT.Parameters()
 params.PopulationSize = 500
@@ -335,6 +338,7 @@ def save_render_plot(imgs,label,save=None,res_vec=None):
    
  
 if post_hoc:
+ print "POST HOC:",load_file
  #to_load = "fool100.pkl"
  to_load = load_file
  stuff = cPickle.load(open(to_load,"rb"))
@@ -344,6 +348,12 @@ if post_hoc:
  num_niches= len(niche_names)
  sort_list=zip(stuff[0],range(num_niches))
  sort_list.sort(reverse=True)
+ for k in range(len(sort_list)-1,-1,-1):
+  key = sort_list[k][1]
+  if key not in niche_transform.include:
+   del sort_list[k]
+ print "length after purge:",len(sort_list)
+ raw_input() 
 
  for k in sort_list[:100]:
   print k,niche_names[k[1]]
