@@ -159,7 +159,7 @@ def evaluate_pic(genome,debug=False,save=None):
 
     return float(results[target_class]),results,full_matrix
 
-def evaluate(genome,debug=False,save=None):
+def evaluate(genome,debug=False,save=None,dnn=True):
     global lighting
     verbose=True
 
@@ -238,12 +238,17 @@ def evaluate(genome,debug=False,save=None):
 
     if verbose:
      print 'running image rec'
+    results,beh = None,None
+    full_matrix=None
 
-    results,beh = run_image(imgs)  
-    #print niche_matrix.T.shape
-    results=np.dot(results,niche_matrix.T)
-    full_matrix = results.copy()
-
+    if dnn:
+     print "dnn"
+     results,beh = run_image(imgs)  
+     #print niche_matrix.T.shape
+     results=np.dot(results,niche_matrix.T)
+     full_matrix = results.copy()
+    else:
+     print "no dnn"
     if debug:
      return imgs,results
 
@@ -310,10 +315,11 @@ params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
 
-def save_render_plot(imgs,label,save=None,res_vec=None):
+def save_render_plot(imgs,label,save=None,res_vec=None,clean=False):
   plt.clf()
   fig = plt.gcf()
-  fig.suptitle(label)
+  if not clean:
+   fig.suptitle(label)
 
   subfig=1
   t_imgsx = (math.ceil(float(len(imgs))/3))
@@ -324,12 +330,16 @@ def save_render_plot(imgs,label,save=None,res_vec=None):
          if res_vec!=None:
           plt.title("Confidence: %0.2f%%" % (res_vec[subfig-1]*100.0))
          plt.imshow(img)
+         plt.axis('off')
          subfig+=1
 
   if save!=None:
    plt.draw()
    plt.pause(0.1)
-   plt.savefig(save)
+   if not clean:
+    plt.savefig(save)
+   else:
+    plt.savefig(save,bbox_inches='tight')
   else:
    plt.show()
    

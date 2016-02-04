@@ -3,8 +3,9 @@ import numpy as np
 import glob
 from niche_transform import transform
 
-files = glob.glob("../Downloads/f1/*.pkl")
-#files = glob.glob("fool10-0.pkl")
+#files = glob.glob("../Downloads/f1/*.pkl")
+files = glob.glob("fool10-0.pkl")
+#files = glob.glob("no-opt.pkl")
 print files
 
 avg=[]
