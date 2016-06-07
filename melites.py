@@ -28,9 +28,6 @@ def evaluate(genome):
     net = NEAT.NeuralNetwork()
     genome.BuildPhenotype(net)
 
-    coords=np.zeros((10,3),dtype=np.float)
-    net.Batch_input(coords,3)
-    asfd
 
     error = 0
 
@@ -79,52 +76,74 @@ def evaluate(genome):
      for element in combos[x]:
       t+=cases[element]
      behavior[x]=t
-    return (4 - error)**2,behavior,None
+    return behavior, (4 - error)**2,None
 
 import networkx as nx
 
 class novsearch:
-  def __init__(self,g,params,evaluate,seed=1,checkpoint=False,checkpoint_interval=10):
+  def __init__(self,g,params,evaluate,seed=1,checkpoint=False,checkpoint_interval=10,do_magic=True):
+   #archive of past behaviors
    self.archive=[]
+   #archive of the *genomes* that represent those past behaviors
    self.garchive=[]
+
+   #evaluation function
    self.evaluate=evaluate
+
+   #initialize the population
    self.pop = NEAT.Population(g, params, True, 1.0, seed)
    self.pop.RNG.Seed(seed)
+
    self.checkpoint=checkpoint
    self.ci = checkpoint_interval
    self.checkpt_counter=0
+   self.do_magic=do_magic
 
   def do_gens(self,gens):
    evaluate=self.evaluate
    generations = 0
    pop=self.pop
+
+   #do the requested number of generations of evolution
    for generation in range(gens):
+
         genome_list = NEAT.GetGenomeList(pop)
         fitness_list=[]
         behavior_list=[]
-        for genome in genome_list:
-         novb,beh,extra = evaluate(genome) 
-         #novb=np.sqrt(novb.mean(axis=0).flatten())
-         novb=np.hstack([novb.max(axis=0),novb.min(axis=0)]).flatten()
-         novb=novb/np.linalg.norm(novb)
 
-         print novb.max(),novb.min()
-         print novb.shape
+        #get the novb (behavior) for each genome in the pop
+        for genome in genome_list:
+         #evaluate genome in the domain to get behavior and fitness
+         novb,fitness,extra = evaluate(genome) 
+
+         if self.do_magic:
+          #novb=np.sqrt(novb.mean(axis=0).flatten())
+          novb=np.hstack([novb.max(axis=0),novb.min(axis=0)]).flatten()
+          novb=novb/np.linalg.norm(novb)
+          print novb.max(),novb.min()
+          print novb.shape
+
          behavior_list.append(novb)
 
+        #now calculate novelty scotres
         if True:
          print "calculating novelty..."
          behaviors = behavior_list
          fitness_list = []
 
+         #judge the novelty of a new indiviudal by all the
+         #behaviors of current population + archive
          compiled_array=numpy.array(self.archive+behavior_list)
          for k in behavior_list:
           fitness_list.append(calc_novelty(k,compiled_array))
 
+         #randomly add one individual to archive per generation
+         #you can do other things here... see original NS paper if interested..
          idx = random.randint(0,len(behaviors)-1)
          self.archive.append(behaviors[idx])
          self.garchive.append(NEAT.Genome(genome_list[idx]))
 
+        #assign novelty as the fitness for each individual
         NEAT.ZipFitness(genome_list, fitness_list)
        
         if self.checkpoint and generation%self.ci==0:
@@ -155,14 +174,20 @@ class novsearch:
         print "after epoch"
         generations = generation
 
+#helper function to calculate the novelty of b given a list of behaviors beh
 def calc_novelty(b,beh):
    b=numpy.array(b)
+
    beh=beh.copy()
-   #beh=numpy.array(archive+behaviors)
+   #calculate distance from b to all vectors in beh
    beh-=b
    beh*=beh
    beh=beh.sum(1)
+
+   #sort distances, i.e. first entries will reflect distance to b's nearest neighbors
    beh.sort()
+
+   #return the summed distance to 25 nearest neighbors (25 is a somewhat arbitrary parameter that you can change)
    return beh[:25].sum()+0.00001
 
 class melites:
@@ -345,10 +370,13 @@ if(__name__=='__main__'):
 	params.CrossoverRate = 0.75  # mutate only 0.25
 	params.MultipointCrossoverRate = 0.4
 	params.SurvivalRate = 0.2
+
         def generator():
           return NEAT.Genome(0, 3, 0, 1, False, NEAT.ActivationFunction.UNSIGNED_SIGMOID, NEAT.ActivationFunction.UNSIGNED_SIGMOID, 0, params)
          
 	g=generator()
         #print hillclimb(g,params,10000,evaluate,10)
  
-        print melites(generator,params,5000000,1000, evaluate,seed=1)
+        ns = novsearch(g,params,evaluate,10,do_magic=False)
+        ns.do_gens(30)
+        #print melites(generator,params,5000000,1000, evaluate,seed=1)

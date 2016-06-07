@@ -40,6 +40,8 @@ def normalize_v3(arr):
 def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,spec=1.0,shiny=100,lighting=True,diff=0.5):
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
+ #print "LIGHTING",lighting
+ #raw_input()
  #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
  _verts,faces = mcubes.marching_cubes(voxels[:,:,:,0],thresh)
 
@@ -62,7 +64,7 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,s
     glLoadIdentity()
 
     gluPerspective(90,1,0.01,1000)
-    gluLookAt(0,0,20, 0,0,0 ,0,1,0)
+    gluLookAt(0,0,sz_z, 0,0,0 ,0,1,0)
 
     glMatrixMode(GL_MODELVIEW)
 

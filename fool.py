@@ -56,6 +56,8 @@ if '--fixed_bg' in arg_dict:
 if '--no_lighting' in arg_dict:
  lighting=False
 
+print "LIGHTING",lighting
+
 if '--run_length' in arg_dict:
  run_length=int(arg_dict['--run_length'][0]) 
 
@@ -91,29 +93,39 @@ sz_x = 20
 sz_y = 20
 sz_z = 20
 
+coordinates = None
+coords = 6
+
 if modeltype=="2d":
  sz_x = 128
  sz_y = 128
  sz_z = 1 
 
-coords = 6
-coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords),dtype=np.double)
+def make_coords(x,y,z):
+ global sz_x,sz_y,sz_z
+ global coordinates
+ sz_x=x
+ sz_y=y
+ sz_z=z
+ coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords),dtype=np.double)
 
-x_grad = numpy.linspace(-1,1,sz_x)
-y_grad = numpy.linspace(-1,1,sz_y)
-z_grad = numpy.linspace(-1,1,sz_z)
+ x_grad = numpy.linspace(-1,1,sz_x)
+ y_grad = numpy.linspace(-1,1,sz_y)
+ z_grad = numpy.linspace(-1,1,sz_z)
 
-for _x in xrange(sz_x):
- for _y in xrange(sz_y):
-  for _z in xrange(sz_z):
-   coordinates[_x,_y,_z,0]=1.0 
-   coordinates[_x,_y,_z,1]=x_grad[_x]
-   coordinates[_x,_y,_z,2]=y_grad[_y]
-   coordinates[_x,_y,_z,3]=z_grad[_z]
-   coordinates[_x,_y,_z,4]=x_grad[_x]**2+y_grad[_y]**2+z_grad[_z]**2
-   coordinates[_x,_y,_z,5]=x_grad[_x]**2+z_grad[_z]**2
+ for _x in xrange(sz_x):
+  for _y in xrange(sz_y):
+   for _z in xrange(sz_z):
+    coordinates[_x,_y,_z,0]=1.0 
+    coordinates[_x,_y,_z,1]=x_grad[_x]
+    coordinates[_x,_y,_z,2]=y_grad[_y]
+    coordinates[_x,_y,_z,3]=z_grad[_z]
+    coordinates[_x,_y,_z,4]=x_grad[_x]**2+y_grad[_y]**2+z_grad[_z]**2
+    coordinates[_x,_y,_z,5]=x_grad[_x]**2+z_grad[_z]**2
 
-coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
+ coordinates=coordinates.reshape((sz_x*sz_y*sz_z,coords))
+
+make_coords(sz_x,sz_y,sz_z)
 
 #JOELNOTE: TODO setup standard image-based cppn setup...
 def evaluate_pic(genome,debug=False,save=None):
