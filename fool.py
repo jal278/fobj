@@ -157,7 +157,8 @@ def evaluate_pic(genome,debug=False,save=None):
     
     print results.shape
 
-    return float(results[target_class]),results,full_matrix
+    #return float(results[target_class]),results,full_matrix
+    return behavior,results,full_matrix
 
 def evaluate(genome,debug=False,save=None,dnn=True):
     global lighting
@@ -315,7 +316,12 @@ params.ActivationFunction_UnsignedSine_Prob = 0.0;
 params.ActivationFunction_Linear_Prob = 1.0;
 
 
+from scipy.misc import imsave
+
 def save_render_plot(imgs,label,save=None,res_vec=None,clean=False):
+  if clean and len(imgs)==1:
+   imsave(save,imgs[0]) 
+   return
   plt.clf()
   fig = plt.gcf()
   if not clean:
@@ -439,7 +445,7 @@ def objective_driven(seed):
 obj=False
 
 if __name__=='__main__':
-    run="me"
+    run="nov"
    
     if run=="obj":
      gen = objective_driven(seed)

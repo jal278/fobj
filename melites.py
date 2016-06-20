@@ -165,6 +165,57 @@ def calc_novelty(b,beh):
    beh.sort()
    return beh[:25].sum()+0.00001
 
+
+def create_dummy_stuff(mult=1.0):
+        
+        params = NEAT.Parameters()
+        params.PopulationSize = 500
+        params.DynamicCompatibility = True
+        params.WeightDiffCoeff = 4.0
+        params.CompatTreshold = 2.0
+        params.YoungAgeTreshold = 15
+        params.SpeciesMaxStagnation = 15
+        params.OldAgeTreshold = 35
+        params.MinSpecies = 5
+        params.MaxSpecies = 25
+        params.RouletteWheelSelection = False
+        params.RecurrentProb = 0.0
+        params.OverallMutationRate = 0.5 * mult
+
+        params.MutateWeightsProb = 0.8
+
+        params.WeightMutationMaxPower = 1.5 *mult
+        params.WeightReplacementMaxPower = 2.0
+        params.MutateWeightsSevereProb = 0.2 *mult
+        params.WeightMutationRate = 0.2 *mult
+
+        params.MaxWeight = 8
+
+        params.MutateAddNeuronProb = 0.03
+        params.MutateAddLinkProb = 0.05
+        params.MutateRemLinkProb = 0.0
+
+        params.MinActivationA  = 4.9
+        params.MaxActivationA  = 4.9
+
+        params.ActivationFunction_SignedSigmoid_Prob = 0.0
+        params.ActivationFunction_UnsignedSigmoid_Prob = 1.0
+        params.ActivationFunction_Tanh_Prob = 0.0
+        params.ActivationFunction_SignedStep_Prob = 0.0
+
+        params.CrossoverRate = 0.75  # mutate only 0.25
+        params.MultipointCrossoverRate = 0.4
+        params.SurvivalRate = 0.2
+        
+        g= NEAT.Genome(0, 3, 0, 1, False, NEAT.ActivationFunction.UNSIGNED_SIGMOID, NEAT.ActivationFunction.UNSIGNED_SIGMOID, 0, params)
+        seed = 1032
+        pop = NEAT.Population(g, params, True, 1.0, seed)
+
+        species = pop.Species[0]
+        RNG=pop.RNG
+        return pop,species,RNG,params
+
+
 class melites:
   def __init__(self,generator,params,seed_evals,evaluate,seed=1,checkpoint=False,checkpoint_interval=10000,history=False,optimize=False):
     self.do_history = history    
