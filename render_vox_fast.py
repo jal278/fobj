@@ -26,8 +26,17 @@ import numpy as np
 import pickle as pickle
 
 import pygame
+
+init_done=False
 pygame.init()
-pygame.display.set_mode((512,512), pygame.OPENGL|pygame.DOUBLEBUF)
+
+disp_sz = 512
+
+def do_init():
+ global disp_sz
+ print disp_sz
+ pygame.display.set_mode((disp_sz,disp_sz), pygame.OPENGL|pygame.DOUBLEBUF)
+ 
 
 def normalize_v3(arr):
     ''' Normalize a numpy array of 3 component vectors shape=(n,3) '''
@@ -38,8 +47,14 @@ def normalize_v3(arr):
     return arr
 
 def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,spec=1.0,shiny=100,lighting=True,diff=0.5):
+ global disp_sz,init_done
+
+ if not init_done:
+  do_init()
  sz_x,sz_y,sz_z,channels = voxels.shape
  thresh = 0.5
+ #print "LIGHTING",lighting
+ #raw_input()
  #verts, faces = measure.marching_cubes(abs(voxels[:,:,:,0]), thresh)
  _verts,faces = mcubes.marching_cubes(voxels[:,:,:,0],thresh)
 
@@ -62,7 +77,7 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,s
     glLoadIdentity()
 
     gluPerspective(90,1,0.01,1000)
-    gluLookAt(0,0,20, 0,0,0 ,0,1,0)
+    gluLookAt(0,0,sz_z, 0,0,0 ,0,1,0)
 
     glMatrixMode(GL_MODELVIEW)
 
@@ -176,7 +191,7 @@ def render(voxels,bg_color=[0.5,0.5,0.5],angle1=45,angle2=10,save=None,amb=0.2,s
     glDisableClientState(GL_COLOR_ARRAY)
     glDisableClientState(GL_NORMAL_ARRAY)
     glPopMatrix()
-    out = glReadPixels(0,0,512,512,GL_RGB,GL_FLOAT)
+    out = glReadPixels(0,0,disp_sz,disp_sz,GL_RGB,GL_FLOAT)
 
     return out
 
@@ -187,6 +202,7 @@ if (__name__=='__main__'):
 
   coords = 5
   coordinates = numpy.zeros((sz_x,sz_y,sz_z,coords))
+  disp_sz = 1024
 
   x_grad = numpy.linspace(-1,1,sz_x)
   y_grad = numpy.linspace(-1,1,sz_y)
@@ -223,4 +239,4 @@ if (__name__=='__main__'):
    plt.clf()
    plt.ion()
    plt.imshow(out)
-   plt.pause(0.1) 
+   plt.pause(1.0) 
