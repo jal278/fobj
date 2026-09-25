@@ -179,3 +179,7 @@ def test_clean_caption():
     assert clean_caption("<start_of_text>free stock photo : a red , blue design . png"
                          "<end_of_text>junk") == "a red, blue design"
     assert clean_caption("royalty free stock illustration of a free kick") == "a free kick"
+    assert clean_caption("illustration of a green and pink color background") == \
+        "a green and pink color background"
+    assert clean_caption("an image of a green and red light") == "a green and red light"
+    assert clean_caption("image of the day") == "image of the day"

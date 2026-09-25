@@ -103,6 +103,7 @@ _BOILERPLATE = [
     r"\b(hd|4k) wallpapers?\b",
     r"\.?\s*\b(png|jpe?g|gif|svg|webp)\b",
     r"^\s*(photo|image|picture|vector|illustration)s?\s*(of)?\s*:",
+    r"^\s*(an? )?(photo|image|picture|vector|illustration|drawing)s? of\s+(?=an?\b)",
 ]
 _DANGLING = {"a", "an", "the", "and", "or", "of", "for", "with", "in", "on", "to", "your", "by", "at"}
 
