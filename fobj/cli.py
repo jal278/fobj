@@ -141,7 +141,10 @@ def cmd_run(args):
             if score != "cosine":
                 raise SystemExit("--open-ended needs --score cosine (softmax scores shift "
                                  "whenever a niche is added)")
-            open_ended = {"novelty_threshold": args.novelty_threshold,
+            open_ended = {"novelty_mode": args.novelty_mode,
+                          "novelty_threshold": args.novelty_threshold,
+                          "image_novelty_threshold": args.image_novelty_threshold,
+                          "duplicate_threshold": args.duplicate_threshold,
                           "caption_threshold": args.caption_threshold,
                           "max_per_batch": args.max_new_niches_per_batch,
                           "max_niches": args.max_niches,
@@ -225,13 +228,18 @@ def make_open_ended(settings, scorer, renderer, factory, args, seed, device, out
     discovery = NicheDiscovery(captioner, novelty_threshold=settings["novelty_threshold"],
                                caption_threshold=settings["caption_threshold"],
                                max_per_batch=settings["max_per_batch"],
-                               max_niches=settings["max_niches"])
+                               max_niches=settings["max_niches"],
+                               novelty_mode=settings.get("novelty_mode", "text"),
+                               image_novelty_threshold=settings.get("image_novelty_threshold", 0.89),
+                               duplicate_threshold=settings.get("duplicate_threshold", 1.01))
     log = open(out / "discoveries.jsonl", "a")
 
     def on_new_niche(info):
+        fmt = lambda v: "-" if v is None else f"{v:.3f}"
+        img = f", image novelty {fmt(info['image_novelty'])}" if "image_novelty" in info else ""
         print(f"  + niche {info['index']}: {info['name']!r} (caption {info['caption_score']:.3f}, "
-              f"nearest {info['nearest']!r} at {info['novelty']:.3f}, eval {info['eval']})",
-              flush=True)
+              f"nearest text {info['nearest']!r} at {fmt(info['novelty'])}{img}, "
+              f"eval {info['eval']})", flush=True)
         log.write(json.dumps(info) + "\n")
         log.flush()
 
@@ -336,8 +344,15 @@ def main(argv=None):
     go.add_argument("--open-ended", action="store_true",
                     help="grow the niche set: images far from every niche found new niches "
                          "named by CoCa captions (use --niches none to start from nothing)")
+    go.add_argument("--novelty-mode", choices=["text", "image", "both"], default="text",
+                    help="novel = far from every niche's text (text), from every archived "
+                         "elite's image (image), or both")
     go.add_argument("--novelty-threshold", type=float, default=0.26,
-                    help="an image is novel if its max cosine to all niche texts is below this")
+                    help="text novelty: max cosine to all niche texts must be below this")
+    go.add_argument("--image-novelty-threshold", type=float, default=0.89,
+                    help="image novelty: max cosine to all archived elite images must be below this")
+    go.add_argument("--duplicate-threshold", type=float, default=0.95,
+                    help="reject a caption whose CLIP text embedding is this close to a niche's")
     go.add_argument("--caption-threshold", type=float, default=0.28,
                     help="minimum CoCa image/caption cosine for a caption to name a niche")
     go.add_argument("--max-new-niches-per-batch", type=int, default=2)

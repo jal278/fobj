@@ -87,18 +87,28 @@ niches.
 
 After each batch, an image founds a new niche if all of these hold:
 
-1. **It is novel.** Its CLIP image embedding is far from the text embedding
-   of every existing niche: the highest cosine similarity is below
-   `--novelty-threshold` (default 0.26).
+1. **It is novel.** What "far" means depends on `--novelty-mode`:
+   * `text` (default): its CLIP image embedding is far from the text
+     embedding of every existing niche. The highest cosine similarity must
+     be below `--novelty-threshold` (default 0.26).
+   * `image`: it is far from the image embedding of every archived elite.
+     The highest cosine similarity must be below
+     `--image-novelty-threshold` (default 0.89). This finds new-looking
+     images even when an existing niche name already fits them roughly.
+   * `both`: both conditions must hold.
 2. **Its caption fits it.** [CoCa](https://arxiv.org/abs/2205.01917) (a CLIP
    model with a text decoder, `coca_ViT-B-32` / `laion2b_s13b_b90k`)
    captions the image. CoCa's own text encoder then embeds the caption, and
    its similarity to the image must be at least `--caption-threshold`
    (default 0.28).
 3. **The caption makes a usable name.** After web boilerplate such as "free
-   stock photo" or ".png" is removed, the caption must be new and at least
-   two words long. The image also must not already be covered by a niche
-   added earlier in the same batch.
+   stock photo" or ".png" is removed, the caption must be at least two words
+   long and must not duplicate an existing niche's name. A duplicate either
+   has the same content words in any order ("red and green color
+   background" / "green and red background"), or a CLIP text embedding
+   within `--duplicate-threshold` (default 0.95) of an existing name. The
+   image also must not already be covered by a niche added earlier in the
+   same batch.
 
 The new niche's text embedding is the caption, embedded as-is (without the
 prompt templates) by the scoring CLIP model. Every current elite, plus the
@@ -112,6 +122,13 @@ Details:
 * **Starting niches.** `--niches none` starts from nothing. `--niches
   imagenet` (the default) adds discovered niches on top of the ImageNet
   classes.
+* **Where the thresholds come from.** They were measured with ViT-B/32 and
+  the LAION CoCa. Re-measure them for other models.
+  * Reworded or reordered duplicate captions have text similarity
+    0.98–0.99 to each other. Distinct but related names have about 0.91–0.95.
+  * A mutated child's highest similarity to any archived elite image is 0.89
+    at the 1st percentile and 0.91 at the 10th, so 0.89 lets roughly 1–3% of
+    children through as novel.
 * **Model choice.** The COCO-finetuned CoCa writes more natural captions,
   but on CPPN images its image/caption similarity can't tell a caption's
   own image from others (0.068 vs 0.062). The LAION-only checkpoint
@@ -137,7 +154,8 @@ fobj export runs/open/checkpoint.pkl --discovered-only --top 100
 ```
 
 An open-ended run also writes two files: `discoveries.jsonl`, which logs
-each new niche with its caption score, novelty and nearest existing niche,
+each new niche with its caption score, text and image novelty, and nearest
+existing niche,
 and `niches.json`, which lists every niche with its provenance and current
 elite score.
 
@@ -186,7 +204,9 @@ Useful flags:
 | `--view-agg` | `geomean` (`mean` for cosine) | how per-view scores combine: `geomean`, `mean`, `min`, `prod` |
 | `--fixed-bg` / `--no-lighting` | off | 3D: grey background / flat colours (the old flags) |
 | `--open-ended` | off | grow the niche set from captions (see above) |
-| `--novelty-threshold` / `--caption-threshold` | 0.26 / 0.28 | open-ended founding rules |
+| `--novelty-mode` | `text` | open-ended novelty: far from niche `text`s, archived `image`s, or `both` |
+| `--novelty-threshold` / `--image-novelty-threshold` | 0.26 / 0.89 | text / image novelty cut-offs |
+| `--caption-threshold` / `--duplicate-threshold` | 0.28 / 0.95 | caption must fit the image / must not duplicate a niche name |
 | `--caption-prefix` | none | e.g. `"a photo of a"` to steer captions |
 
 On a 4-core CPU with ViT-B/32 this runs at about 30 evaluations per second

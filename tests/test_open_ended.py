@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 from fobj.caption import clean_caption
 from fobj.map_elites import MapElites
-from fobj.open_ended import NicheDiscovery, OpenEndedSearch
+from fobj.open_ended import NicheDiscovery, OpenEndedSearch, name_key
 
 AXES = {"reddish thing": 0, "greenish thing": 1, "bluish thing": 2}
 _keys = itertools.count()
@@ -48,7 +48,8 @@ class FakeScorer:
     def embed_texts(self, texts, templates=None):
         out = torch.zeros(len(texts), 3)
         for i, t in enumerate(texts):
-            out[i, AXES[t]] = 1.0
+            # the axis whose colour word appears in the text, e.g. "thing reddish"
+            out[i, next(v for k, v in AXES.items() if k.split()[0] in t)] = 1.0
         return out
 
     def image_features(self, imgs):
@@ -183,3 +184,52 @@ def test_clean_caption():
         "a green and pink color background"
     assert clean_caption("an image of a green and red light") == "a green and red light"
     assert clean_caption("image of the day") == "image of the day"
+
+
+def test_duplicate_names_rejected():
+    assert name_key("a red and green color background") == name_key("green and red background")
+    assert name_key("red and green") != name_key("red and blue")
+    # same words, different order
+    s = make_search(names=["thing reddish"], novelty=1.1)
+    imgs = FakeRenderer().render_batch([G([1, 0, 0])])
+    props = s.discovery.propose(imgs, s.scorer.image_features(imgs), s.scorer.text_features,
+                                s.scorer.niche_names, s.scorer.embed_texts)
+    assert props == [] and s.discovery.stats["duplicate_name"] == 1
+    # different words, but the text embedding is (here: exactly) the same
+    s = make_search(names=["very reddish thing indeed"], novelty=1.1)
+    props = s.discovery.propose(imgs, s.scorer.image_features(imgs), s.scorer.text_features,
+                                s.scorer.niche_names, s.scorer.embed_texts)
+    assert props == [] and s.discovery.stats["duplicate_name"] == 1
+    # the embedding check is off above 1
+    s = make_search(names=["very reddish thing indeed"], novelty=1.1, duplicate_threshold=1.01)
+    props = s.discovery.propose(imgs, s.scorer.image_features(imgs), s.scorer.text_features,
+                                s.scorer.niche_names, s.scorer.embed_texts)
+    assert [p.name for p in props] == ["reddish thing"]
+
+
+def test_image_novelty_mode():
+    s = make_search(novelty_mode="image", image_novelty_threshold=0.9, max_per_batch=4)
+    imgs = FakeRenderer().render_batch([G([1, 0.05, 0]), G([0, 1, 0])])
+    feats = s.scorer.image_features(imgs)
+    archive = s.scorer.image_features(FakeRenderer().render_batch([G([1, 0, 0])]))
+    props = s.discovery.propose(imgs, feats, s.scorer.text_features, [], s.scorer.embed_texts,
+                                archive)
+    # the red image looks like the archived one; only the green one is novel
+    assert [p.name for p in props] == ["greenish thing"]
+    assert props[0].image_novelty < 0.9
+    # "both" also needs text novelty: a green niche name already covers it
+    s = make_search(names=["greenish thing"], novelty=0.5, novelty_mode="both",
+                    image_novelty_threshold=0.9)
+    assert s.discovery.propose(imgs, feats, s.scorer.text_features, s.scorer.niche_names,
+                               s.scorer.embed_texts, archive) == []
+    with pytest.raises(ValueError):
+        NicheDiscovery(None, novelty_mode="nope")
+
+
+def test_image_mode_search_grows_niches():
+    s = make_search(novelty_mode="image", image_novelty_threshold=0.9)
+    while s.evals < 300:
+        s.step()
+    assert sorted(s.niche_names) == sorted(AXES)
+    assert all("image_novelty" in i for i in s.niche_info)
+    assert s.niche_info[0]["image_novelty"] is None  # found before anything was archived
