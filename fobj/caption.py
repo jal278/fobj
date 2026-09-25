@@ -101,9 +101,15 @@ _BOILERPLATE = [
     r"\bfor (your )?(iphone|android|phone|desktop|mobile|ipad)\b.*$",
     r"\b(with an image )?for (free use|the color)\b",
     r"\b(hd|4k) wallpapers?\b",
+    r"\bstock (video )?footage\b",
+    r"\b(on )?pngtree\b",
+    r"\bfor (your )?(design|cover|poster|banner|book|website)\b.*$",
+    r"\bimages?,\s*pictures?\b",
+    r"\bno people\b.*$",
     r"\.?\s*\b(png|jpe?g|gif|svg|webp)\b",
     r"^\s*(photo|image|picture|vector|illustration)s?\s*(of)?\s*:",
-    r"^\s*(an? )?(photo|image|picture|vector|illustration|drawing)s? of\s+(?=an?\b)",
+    r"^\s*((an?|free|stock|vector|cartoon|royalty)\s+)*"
+    r"(photo|image|picture|vector|illustration|drawing)s? of\s+(?=an?\b)",
 ]
 _DANGLING = {"a", "an", "the", "and", "or", "of", "for", "with", "in", "on", "to", "your", "by", "at"}
 

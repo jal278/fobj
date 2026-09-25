@@ -184,6 +184,14 @@ def test_clean_caption():
         "a green and pink color background"
     assert clean_caption("an image of a green and red light") == "a green and red light"
     assert clean_caption("image of the day") == "image of the day"
+    assert clean_caption("stock vector illustration of a red ring") == "a red ring"
+    for junk in ["green and yellow light effect stock video footage",
+                 "green and yellow light effect on pngtree",
+                 "green and yellow light effect for cover book, poster o",
+                 "green and yellow light effect no people day close"]:
+        assert clean_caption(junk) == "green and yellow light effect", junk
+    assert clean_caption("vector illustration of a green and yellow background") == \
+        "a green and yellow background"
 
 
 def test_duplicate_names_rejected():

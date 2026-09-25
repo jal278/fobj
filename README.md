@@ -143,15 +143,47 @@ Details:
   limit how fast and how far the niche set grows. Captioning costs about
   0.3 s per image on CPU, and only the most novel candidates are captioned.
 
-On early CPPN images, CoCa mostly describes what it sees: colour fields
-("blue green color background", "green and red background with a ring").
-It does not see the objects that the ImageNet "fooling" niches are named
-after.
+CoCa mostly describes what it sees in CPPN images: colour fields, lines,
+rings and "light effects". It does not see the objects that the ImageNet
+"fooling" niches are named after.
 
 ```bash
-fobj run --open-ended --niches none --out runs/open --evals 100000 --seed 1
+fobj run --open-ended --out runs/open --evals 100000 --seed 1          # ImageNet + discovered niches
+fobj run --open-ended --novelty-mode image --out runs/open-img --evals 100000 --seed 1
 fobj export runs/open/checkpoint.pkl --discovered-only --top 100
 ```
+
+### Comparing the novelty modes
+
+These runs all started from the ImageNet niches and used duplicate
+rejection: 15,000 evaluations each, seed 2, ViT-B/32 on CPU.
+
+| | `text` | `image` | `both` |
+| --- | --- | --- | --- |
+| niches discovered | 32 | 42 | 8 |
+| novel / captioned / accepted | 108 / 84 / 32 | 94 / 66 / 42 | 37 / 13 / 8 |
+| rejected: low caption score / duplicate name | 29 / 19 | 5 / 15 | 2 / 0 |
+| first discovery after eval 1,000 | eval 1,164 | eval 2,604 | eval 2,604 |
+| ImageNet niches, mean / max score | 0.270 / 0.376 | 0.274 / 0.343 | 0.281 / 0.350 |
+
+* **`text`** keeps finding niches throughout the run, in every colour. The
+  names are mostly colour-field descriptions ("red and black background",
+  "a yellow and red background with an image of the sun").
+* **`image`** gives captions that describe structure and fit their images
+  better: only 5 were rejected for a low caption score. Examples:
+  "green and black background with a chain", "green color design with a
+  heart shape", "a black ring with green light in the center", and even
+  "united states marine corps service ribbon" for a striped image. But most
+  of these niches come from a single family of green images with
+  horizontal lines. The run found one region unlike the archive and kept
+  exploring it. So the names vary more than the images do.
+* **`both`** is too strict at these thresholds.
+
+`text` stays the default. Starting from the ImageNet niches (the default
+`--niches imagenet`) matters more than the novelty mode. From an empty
+niche set, discovery stopped at 13 niches, because a few generic colour
+niches ended up close to everything and nothing pushed images toward
+complexity.
 
 An open-ended run also writes two files: `discoveries.jsonl`, which logs
 each new niche with its caption score, text and image novelty, and nearest
