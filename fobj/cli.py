@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from . import clip_eval
+from . import caption, clip_eval
 from .genome import GenomeFactory, load_config
 from .map_elites import MapElites
 from .niches import load_niches
@@ -39,7 +39,8 @@ def _args_dict(args):
     return {k: v for k, v in vars(args).items() if k != "func"}
 
 
-def save_checkpoint(path, me, args, niche_names, config_text, render, view_agg):
+def save_checkpoint(path, me, args, niche_names, config_text, render, view_agg,
+                    score, open_ended=None):
     state = {
         "version": CHECKPOINT_VERSION,
         "map_elites": me.state_dict(),
@@ -47,6 +48,8 @@ def save_checkpoint(path, me, args, niche_names, config_text, render, view_agg):
         "config_text": config_text,
         "render": render,
         "view_agg": view_agg,
+        "score": score,
+        "open_ended": open_ended,
         "args": _args_dict(args),
         "python_random": random.getstate(),
     }
@@ -62,6 +65,8 @@ def load_checkpoint(path):
     # Version 1 checkpoints were always 2D, single view.
     state.setdefault("render", {"domain": "2d", "size": state["args"].get("size") or 224})
     state.setdefault("view_agg", "mean")
+    state.setdefault("score", state["args"].get("score") or "softmax")
+    state.setdefault("open_ended", None)
     return state
 
 
@@ -77,7 +82,8 @@ def config_from_text(text, out):
     return load_config(path)
 
 
-def summarize(scores, thresholds=(0.1, 0.5, 0.9)):
+def summarize(scores, mode="softmax"):
+    thresholds = (0.1, 0.5, 0.9) if mode == "softmax" else (0.25, 0.3, 0.35)
     s = scores[np.isfinite(scores)]
     parts = [f"mean={s.mean():.4f}" if s.size else "mean=nan"]
     parts += [f">{t}:{int((s > t).sum())}" for t in thresholds]
@@ -117,6 +123,7 @@ def cmd_run(args):
         config = config_from_text(resume["config_text"], out)
         config_text = resume["config_text"]
         render, view_agg = resume["render"], resume["view_agg"]
+        score, open_ended = resume["score"], resume["open_ended"]
     else:
         niche_names = load_niches(args.niches)
         config_text = _write_config_copy(out, args.config or DATA / DEFAULT_CONFIGS[args.domain])
@@ -125,17 +132,41 @@ def cmd_run(args):
         if args.domain == "3d":
             render.update(voxels=args.voxels, views=args.views, fixed_bg=args.fixed_bg,
                           lighting=not args.no_lighting, march_step=args.march_step)
-        view_agg = args.view_agg or ("geomean" if args.score == "softmax" else "mean")
+        score = args.score or ("cosine" if args.open_ended else "softmax")
+        view_agg = args.view_agg or ("geomean" if score == "softmax" else "mean")
+        open_ended = None
+        if args.open_ended:
+            if args.domain != "2d":
+                raise SystemExit("--open-ended supports --domain 2d only for now")
+            if score != "cosine":
+                raise SystemExit("--open-ended needs --score cosine (softmax scores shift "
+                                 "whenever a niche is added)")
+            open_ended = {"novelty_threshold": args.novelty_threshold,
+                          "caption_threshold": args.caption_threshold,
+                          "max_per_batch": args.max_new_niches_per_batch,
+                          "max_niches": args.max_niches,
+                          "caption_model": args.caption_model or caption.DEFAULT_MODEL,
+                          "caption_pretrained": args.caption_pretrained or caption.DEFAULT_PRETRAINED,
+                          "caption_prefix": args.caption_prefix}
 
     seed = args.seed if args.seed is not None else int(time.time())
     random.seed(seed)
     torch.manual_seed(seed)
 
-    print(f"device={device} niches={len(niche_names)} clip={args.clip_model}/{args.clip_pretrained}")
+    discovered = []
+    if resume and open_ended:
+        info = resume["map_elites"]["open_ended"]["niche_info"]
+        discovered = [n for n, i in zip(niche_names, info) if i["source"] == "discovered"]
+        niche_names = [n for n, i in zip(niche_names, info) if i["source"] != "discovered"]
+    print(f"device={device} niches={len(niche_names) + len(discovered)} "
+          f"clip={args.clip_model}/{args.clip_pretrained} score={score}")
     scorer = clip_eval.ClipScorer(niche_names, model=args.clip_model,
                                   pretrained=args.clip_pretrained,
                                   templates=args.prompt or clip_eval.DEFAULT_TEMPLATES,
-                                  mode=args.score, device=device)
+                                  mode=score, device=device)
+    if discovered:
+        scorer.add_niches(discovered)
+    niche_names = scorer.niche_names  # grows in open-ended runs
     render["size"] = render["size"] or scorer.image_size[0]
     renderer = make_renderer(render, config, device=device)
     print(f"render={render} view_agg={view_agg}")
@@ -147,9 +178,12 @@ def cmd_run(args):
 
     existing = [g for g in resume["map_elites"]["elites"] if g is not None] if resume else ()
     factory = GenomeFactory(config, existing)
-    me = MapElites(len(niche_names), factory.new, factory.mutate, evaluate,
-                   seed_evals=args.seed_evals, batch_size=args.batch_size,
-                   curiosity=args.curiosity, rng=np.random.default_rng(seed))
+    if open_ended:
+        me = make_open_ended(open_ended, scorer, renderer, factory, args, seed, device, out)
+    else:
+        me = MapElites(len(niche_names), factory.new, factory.mutate, evaluate,
+                       seed_evals=args.seed_evals, batch_size=args.batch_size,
+                       curiosity=args.curiosity, rng=np.random.default_rng(seed))
     if resume:
         me.load_state_dict(resume["map_elites"])
         random.setstate(resume["python_random"])
@@ -165,15 +199,52 @@ def cmd_run(args):
         if me.evals >= next_log or me.evals >= args.evals:
             rate = (me.evals - e0) / max(time.time() - t0, 1e-9)
             best = int(np.argmax(me.scores))
-            print(f"evals={me.evals} {summarize(me.scores)} "
+            extra = f" niches={len(niche_names)}" if open_ended else ""
+            print(f"evals={me.evals} {summarize(me.scores, score)}{extra} "
                   f"best={niche_names[best]!r}:{me.scores[best]:.3f} ({rate:.1f} evals/s)",
                   flush=True)
             next_log += args.log_every
         if me.evals >= next_save or me.evals >= args.evals:
-            save_checkpoint(ckpt, me, args, niche_names, config_text, render, view_agg)
+            save_checkpoint(ckpt, me, args, niche_names, config_text, render, view_agg,
+                            score, open_ended)
+            if open_ended:
+                write_niches(out / "niches.json", niche_names, me.niche_info, me.scores,
+                             me.discovery.stats)
             contact_sheet(renderer, me, niche_names, out / "top.png")
             next_save += args.save_every
     print(f"done: {ckpt}")
+
+
+def make_open_ended(settings, scorer, renderer, factory, args, seed, device, out):
+    from .caption import CocaCaptioner
+    from .open_ended import NicheDiscovery, OpenEndedSearch
+
+    print(f"open-ended: {settings}")
+    captioner = CocaCaptioner(settings["caption_model"], settings["caption_pretrained"],
+                              device=device, prefix=settings.get("caption_prefix", ""))
+    discovery = NicheDiscovery(captioner, novelty_threshold=settings["novelty_threshold"],
+                               caption_threshold=settings["caption_threshold"],
+                               max_per_batch=settings["max_per_batch"],
+                               max_niches=settings["max_niches"])
+    log = open(out / "discoveries.jsonl", "a")
+
+    def on_new_niche(info):
+        print(f"  + niche {info['index']}: {info['name']!r} (caption {info['caption_score']:.3f}, "
+              f"nearest {info['nearest']!r} at {info['novelty']:.3f}, eval {info['eval']})",
+              flush=True)
+        log.write(json.dumps(info) + "\n")
+        log.flush()
+
+    return OpenEndedSearch(scorer, renderer, factory.new, factory.mutate, discovery,
+                           seed_evals=args.seed_evals, batch_size=args.batch_size,
+                           curiosity=args.curiosity, rng=np.random.default_rng(seed),
+                           on_new_niche=on_new_niche)
+
+
+def write_niches(path, names, info, scores, stats):
+    rows = [{"index": i, "name": n, "score": float(s) if np.isfinite(s) else None, **inf}
+            for i, (n, inf, s) in enumerate(zip(names, info, scores))]
+    path.write_text(json.dumps({"discovery_stats": stats, "niches": rows}, indent=1))
 
 
 def cmd_export(args):
@@ -187,8 +258,14 @@ def cmd_export(args):
     names = state["niche_names"]
     me_state = state["map_elites"]
     scores, elites = np.asarray(me_state["scores"]), me_state["elites"]
+    niche_info = me_state.get("open_ended", {}).get("niche_info")
+    if args.discovered_only and niche_info:
+        keep = {i for i, inf in enumerate(niche_info) if inf.get("source") == "discovered"}
+    else:
+        keep = None
 
-    order = [i for i in np.argsort(-scores) if elites[i] is not None]
+    order = [i for i in np.argsort(-scores) if elites[i] is not None
+             and (keep is None or i in keep)]
     if args.min_score is not None:
         order = [i for i in order if scores[i] >= args.min_score]
     if args.top:
@@ -199,6 +276,8 @@ def cmd_export(args):
         to_pil(image_strip(renderer.render_views(elites[i]))).save(out / fname)
         row = {"rank": rank, "niche": int(i), "name": names[i],
                "score": float(scores[i]), "file": fname}
+        if niche_info:
+            row.update({k: v for k, v in niche_info[i].items() if k != "genome"})
         if mesh:
             from .render3d import marching_cubes_mesh, save_ply
 
@@ -232,7 +311,8 @@ def main(argv=None):
     r.add_argument("--prompt", action="append",
                    help="prompt template with {} for the niche name; repeat to ensemble "
                         f"(default: {clip_eval.DEFAULT_TEMPLATES[0]!r})")
-    r.add_argument("--score", choices=["softmax", "cosine"], default="softmax")
+    r.add_argument("--score", choices=["softmax", "cosine"], default=None,
+                   help="softmax (default) or cosine (default and required with --open-ended)")
     r.add_argument("--curiosity", action="store_true",
                    help="prefer parents from niches that are still improving (old --map_opt)")
     r.add_argument("--size", type=int, default=None,
@@ -249,7 +329,24 @@ def main(argv=None):
     r.add_argument("--device", default="auto")
     r.add_argument("--log-every", type=int, default=1000)
     r.add_argument("--save-every", type=int, default=10_000)
-    r.add_argument("--resume", default=None, help="checkpoint.pkl to continue from")
+    r.add_argument("--resume", default=None,
+                   help="checkpoint.pkl to continue from (keeps its domain, scoring and "
+                        "open-ended settings)")
+    go = r.add_argument_group("open-ended niches (2d only)")
+    go.add_argument("--open-ended", action="store_true",
+                    help="grow the niche set: images far from every niche found new niches "
+                         "named by CoCa captions (use --niches none to start from nothing)")
+    go.add_argument("--novelty-threshold", type=float, default=0.26,
+                    help="an image is novel if its max cosine to all niche texts is below this")
+    go.add_argument("--caption-threshold", type=float, default=0.28,
+                    help="minimum CoCa image/caption cosine for a caption to name a niche")
+    go.add_argument("--max-new-niches-per-batch", type=int, default=2)
+    go.add_argument("--max-niches", type=int, default=None, help="stop adding niches at this many")
+    go.add_argument("--caption-model", default=None, help="default: coca_ViT-B-32")
+    go.add_argument("--caption-pretrained", default=None, help="default: laion2b_s13b_b90k")
+    go.add_argument("--caption-prefix", default="",
+                    help='text every caption starts from, e.g. "a photo of a" to steer CoCa '
+                         "towards naming objects (stripped from niche names)")
     r.set_defaults(func=cmd_run)
 
     e = sub.add_parser("export", help="render the elites in a checkpoint to PNGs (and meshes)")
@@ -258,6 +355,8 @@ def main(argv=None):
     e.add_argument("--size", type=int, default=512)
     e.add_argument("--top", type=int, default=None)
     e.add_argument("--min-score", type=float, default=None)
+    e.add_argument("--discovered-only", action="store_true",
+                   help="open-ended runs: only export niches found during the run")
     e.add_argument("--mesh", action="store_true",
                    help="3d: also write a coloured .ply mesh per elite (needs scikit-image)")
     e.add_argument("--device", default="auto")

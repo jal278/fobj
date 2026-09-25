@@ -16,9 +16,12 @@ def load_niches(spec="imagenet"):
     """Returns a list of niche names.
 
     ``spec`` is ``"imagenet"`` (the 1000 ImageNet WordNet classes, the niches
-    of the original fooling-objects experiments) or a path to a text file
+    of the original fooling-objects experiments), ``"none"`` (no niches; for
+    open-ended runs that discover all of theirs) or a path to a text file
     with one name per line (blank lines and ``#`` comments ignored).
     """
+    if spec == "none":
+        return []
     if spec == "imagenet":
         return [row["name"] for row in imagenet_classes()]
     names = []

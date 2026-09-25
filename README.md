@@ -77,6 +77,70 @@ for reference.
   `maillot (tights)` / `maillot (swimsuit)`. You can also pass
   `--niches my_labels.txt`, with one label per line.
 
+## Open-ended niches
+
+With `--open-ended` (2D only for now), the niche set grows during the run,
+named by what a captioning model sees in the images. The code lives in
+`fobj/open_ended.py` (`NicheDiscovery` and `OpenEndedSearch`) and
+`fobj/caption.py`. The core MAP-Elites code only gained a generic way to add
+niches.
+
+After each batch, an image founds a new niche if all of these hold:
+
+1. **It is novel.** Its CLIP image embedding is far from the text embedding
+   of every existing niche: the highest cosine similarity is below
+   `--novelty-threshold` (default 0.26).
+2. **Its caption fits it.** [CoCa](https://arxiv.org/abs/2205.01917) (a CLIP
+   model with a text decoder, `coca_ViT-B-32` / `laion2b_s13b_b90k`)
+   captions the image. CoCa's own text encoder then embeds the caption, and
+   its similarity to the image must be at least `--caption-threshold`
+   (default 0.28).
+3. **The caption makes a usable name.** After web boilerplate such as "free
+   stock photo" or ".png" is removed, the caption must be new and at least
+   two words long. The image also must not already be covered by a niche
+   added earlier in the same batch.
+
+The new niche's text embedding is the caption, embedded as-is (without the
+prompt templates) by the scoring CLIP model. Every current elite, plus the
+batch that found the niche, then competes for it, so a new niche starts with
+the best image seen so far rather than only the one that founded it.
+
+Details:
+
+* **Scoring mode.** Open-ended runs use `--score cosine`. With `softmax`,
+  adding a niche would change every other niche's scores.
+* **Starting niches.** `--niches none` starts from nothing. `--niches
+  imagenet` (the default) adds discovered niches on top of the ImageNet
+  classes.
+* **Model choice.** The COCO-finetuned CoCa writes more natural captions,
+  but on CPPN images its image/caption similarity can't tell a caption's
+  own image from others (0.068 vs 0.062). The LAION-only checkpoint
+  separates them well (0.32 vs 0.22), so it's the default. The thresholds
+  above were calibrated for these models; other models need new values.
+* **Caption decoding.** CoCa is decoded greedily by fobj itself, because
+  open_clip's `generate()` needs `transformers` < 5.
+* **Steering captions.** `--caption-prefix "a photo of a"` starts every
+  caption with that text, which nudges CoCa toward naming things. The
+  prefix is stripped from niche names.
+* **Growth.** `--max-new-niches-per-batch` (default 2) and `--max-niches`
+  limit how fast and how far the niche set grows. Captioning costs about
+  0.3 s per image on CPU, and only the most novel candidates are captioned.
+
+On early CPPN images, CoCa mostly describes what it sees: colour fields
+("blue green color background", "green and red background with a ring").
+It does not see the objects that the ImageNet "fooling" niches are named
+after.
+
+```bash
+fobj run --open-ended --niches none --out runs/open --evals 100000 --seed 1
+fobj export runs/open/checkpoint.pkl --discovered-only --top 100
+```
+
+An open-ended run also writes two files: `discoveries.jsonl`, which logs
+each new niche with its caption score, novelty and nearest existing niche,
+and `niches.json`, which lists every niche with its provenance and current
+elite score.
+
 ## Usage
 
 ```bash
@@ -94,8 +158,9 @@ fobj run --domain 3d --out runs/objects --evals 100000 --seed 1
 fobj export runs/objects/checkpoint.pkl --size 256 --top 100 --mesh
 ```
 
-When you resume a run, the domain, render settings and view aggregation
-come from the checkpoint, so the archive's scores stay comparable.
+When you resume a run, the domain, render settings, score mode, view
+aggregation and open-ended settings come from the checkpoint, so the
+archive's scores stay comparable.
 
 `fobj run` writes the following to `--out`:
 
@@ -109,8 +174,8 @@ Useful flags:
 | --- | --- | --- |
 | `--clip-model` / `--clip-pretrained` | `ViT-B-32-quickgelu` / `openai` | any `open_clip.list_pretrained()` pair, e.g. `ViT-L-14` / `datacomp_xl_s13b_b90k` |
 | `--prompt` | `"a photo of a {}."` | repeat the flag to average several templates |
-| `--score` | `softmax` | `softmax` (niches compete) or `cosine` |
-| `--niches` | `imagenet` | or a text file of labels |
+| `--score` | `softmax` (`cosine` with `--open-ended`) | `softmax` (niches compete) or `cosine` |
+| `--niches` | `imagenet` | `none`, or a text file of labels |
 | `--batch-size` | 64 | images per CLIP forward pass |
 | `--seed-evals` | 500 | random genomes before elites are mutated |
 | `--curiosity` | off | old `--map_opt` parent selection |
@@ -120,6 +185,9 @@ Useful flags:
 | `--voxels` / `--views` | 32 / 6 | 3D grid resolution per axis / views per object |
 | `--view-agg` | `geomean` (`mean` for cosine) | how per-view scores combine: `geomean`, `mean`, `min`, `prod` |
 | `--fixed-bg` / `--no-lighting` | off | 3D: grey background / flat colours (the old flags) |
+| `--open-ended` | off | grow the niche set from captions (see above) |
+| `--novelty-threshold` / `--caption-threshold` | 0.26 / 0.28 | open-ended founding rules |
+| `--caption-prefix` | none | e.g. `"a photo of a"` to steer captions |
 
 On a 4-core CPU with ViT-B/32 this runs at about 30 evaluations per second
 in 2D and about 4 objects per second in 3D (six CLIP images each). CLIP

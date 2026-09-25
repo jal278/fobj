@@ -75,17 +75,45 @@ class ClipScorer:
         path = self._cache_path()
         if cache and path.exists():
             return torch.load(path, map_location=self.device)
-        feats = torch.zeros(len(self.niche_names), self._embed_dim(), device=self.device)
-        for template in self.templates:
-            prompts = [template.format(n) for n in self.niche_names]
-            for i in range(0, len(prompts), 256):
-                tokens = self.tokenizer(prompts[i:i + 256]).to(self.device)
-                feats[i:i + 256] += F.normalize(self.model.encode_text(tokens).float(), dim=-1)
-        feats = F.normalize(feats, dim=-1)
+        feats = self.embed_texts(self.niche_names, self.templates)
         if cache:
             path.parent.mkdir(parents=True, exist_ok=True)
             torch.save(feats.cpu(), path)
         return feats
+
+    @torch.no_grad()
+    def embed_texts(self, texts, templates=None):
+        """Normalised text embeddings, (len(texts), dim).
+
+        With ``templates``, each text is the normalised mean over the filled-in
+        templates (prompt ensembling); without, the text is embedded as is.
+        """
+        templates = templates or ("{}",)
+        feats = torch.zeros(len(texts), self._embed_dim(), device=self.device)
+        for template in templates:
+            prompts = [template.format(t) for t in texts]
+            for i in range(0, len(prompts), 256):
+                tokens = self.tokenizer(prompts[i:i + 256]).to(self.device)
+                feats[i:i + 256] += F.normalize(self.model.encode_text(tokens).float(), dim=-1)
+        return F.normalize(feats, dim=-1)
+
+    def add_niches(self, names, templated=False):
+        """Append niches; returns their indices. Discovered captions are
+        usually full phrases, so by default they skip the prompt templates."""
+        feats = self.embed_texts(names, self.templates if templated else None)
+        start = len(self.niche_names)
+        self.niche_names.extend(names)
+        self.text_features = torch.cat([self.text_features, feats])
+        return list(range(start, len(self.niche_names)))
+
+    def scores_from_features(self, feats):
+        """(B, dim) normalised image features -> (B, num_niches) numpy scores."""
+        sims = feats @ self.text_features.T
+        if self.mode == "cosine":
+            out = sims
+        else:
+            out = (self.logit_scale * sims + self.logit_bias).softmax(dim=-1)
+        return out.cpu().numpy().astype(np.float64)
 
     @torch.no_grad()
     def _embed_dim(self):
@@ -107,12 +135,7 @@ class ClipScorer:
         """Returns a (B, num_niches) numpy array of per-niche scores."""
         feats = torch.cat([self.image_features(images[i:i + chunk])
                            for i in range(0, len(images), chunk)])
-        sims = feats @ self.text_features.T
-        if self.mode == "cosine":
-            out = sims
-        else:
-            out = (self.logit_scale * sims + self.logit_bias).softmax(dim=-1)
-        return out.cpu().numpy().astype(np.float64)
+        return self.scores_from_features(feats)
 
 
 VIEW_AGGREGATIONS = ("geomean", "mean", "min", "prod")
