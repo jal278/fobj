@@ -5,15 +5,20 @@ Evolve images with CPPN-NEAT and MAP-Elites. Each niche is a text label, and
 fits it. By default the niches are the 1000 ImageNet classes, named from
 their WordNet synsets.
 
+There are two domains:
+
+* `2d`: a CPPN draws an image.
+* `3d`: a CPPN defines a coloured voxel object, which is rendered from
+  several angles and scored on all of them.
+
 This is a modernised version of the original "fooling objects" code. That
 code used MultiNEAT and a Caffe GoogLeNet and is kept under [`legacy/`](legacy/)
-for reference. The 2D image path has been ported so far. The 3D voxel path
-has not been ported yet.
+for reference.
 
 ## How it works
 
 * **Genomes**: [neat-python](https://github.com/CodeReclaimers/neat-python)
-  genomes, configured by `fobj/data/cppn2d.cfg`. MAP-Elites only mutates
+  genomes, configured by `fobj/data/cppn2d.cfg` or `cppn3d.cfg`. MAP-Elites only mutates
   them; there is no crossover and no speciation.
 * **CPPN evaluation**: `fobj/pytorch_neat/` is a trimmed and fixed copy of
   Uber's [PyTorch-NEAT](https://github.com/uber-research/PyTorch-NEAT) CPPN
@@ -28,9 +33,32 @@ has not been ported yet.
   * tensors are created on the right device and dtype
   * nodes are evaluated in order instead of by recursion
   * works with neat-python 2.x
-* **Rendering** (`fobj/render.py`): the CPPN inputs are `(x, y, d)` in
+* **2D rendering** (`fobj/render.py`): the CPPN inputs are `(x, y, d)` in
   [-1, 1], where `d` is the distance from the centre. The outputs are RGB,
   squashed to [0, 1] with a sigmoid.
+* **3D rendering** (`fobj/render3d.py`): a headless port of the old
+  marching-cubes + OpenGL renderer.
+  * The CPPN is evaluated on a voxel grid (32³ by default) with inputs
+    `(x, y, z, d, dxz)`. `dxz` is the distance from the vertical axis, which
+    makes vase-like shapes easy to evolve.
+  * Output 0 is density: the object's surface is where it crosses 0.5. The
+    grid border is forced empty, as before, so every surface is closed.
+    Outputs 1–3 are the HSV colour.
+  * Seven more outputs, read at the grid centre, evolve the background colour
+    and the material (shininess, specular, ambient, diffuse). They replace
+    the old trick of storing these in spare neuron biases and time
+    constants. Set `num_outputs = 4` in the config to fix them instead.
+  * The surface is found by marching rays through the grid in torch. That is
+    the same surface marching cubes would extract, but it needs no OpenGL or
+    display, works on a GPU, and skips empty space.
+  * The scene matches the old renderer: a camera at distance 2 with a 90°
+    field of view, the same three lights, and six views 45° apart that
+    alternate a 5° tilt.
+  * The per-view scores are combined with a geometric mean (`--view-agg`).
+    It ranks objects the same way as the old product over views, but stays
+    on the same scale as a single view's score.
+  * `fobj export --mesh` also writes each elite as a coloured `.ply` mesh,
+    extracted with marching cubes. This needs scikit-image.
 * **Scoring** (`fobj/clip_eval.py`): each niche name goes into one or more
   prompt templates (default `"a photo of a {}."`). The resulting text
   embeddings are averaged per niche and cached in `~/.cache/fobj`. An image
@@ -60,7 +88,14 @@ fobj run --out runs/imagenet --evals 100000 --seed 1
 # resume, then render the elites at 512px
 fobj run --out runs/imagenet --resume runs/imagenet/checkpoint.pkl --evals 200000
 fobj export runs/imagenet/checkpoint.pkl --size 512 --top 100
+
+# 3D objects: 6 views per object; export writes one strip of views per elite, plus .ply meshes
+fobj run --domain 3d --out runs/objects --evals 100000 --seed 1
+fobj export runs/objects/checkpoint.pkl --size 256 --top 100 --mesh
 ```
+
+When you resume a run, the domain, render settings and view aggregation
+come from the checkpoint, so the archive's scores stay comparable.
 
 `fobj run` writes the following to `--out`:
 
@@ -80,10 +115,17 @@ Useful flags:
 | `--seed-evals` | 500 | random genomes before elites are mutated |
 | `--curiosity` | off | old `--map_opt` parent selection |
 | `--device` | `auto` | `cuda`, `mps` or `cpu` |
+| `--domain` | `2d` | `2d` images or `3d` voxel objects |
+| `--size` | CLIP input (2d), 128 (3d) | render resolution; images are resized to the CLIP input size |
+| `--voxels` / `--views` | 32 / 6 | 3D grid resolution per axis / views per object |
+| `--view-agg` | `geomean` (`mean` for cosine) | how per-view scores combine: `geomean`, `mean`, `min`, `prod` |
+| `--fixed-bg` / `--no-lighting` | off | 3D: grey background / flat colours (the old flags) |
 
-On a 4-core CPU with ViT-B/32 this runs at about 30 evaluations per second.
-CLIP takes almost all of that time; rendering a 224² CPPN takes about 2 ms,
-so a GPU should be much faster.
+On a 4-core CPU with ViT-B/32 this runs at about 30 evaluations per second
+in 2D and about 4 objects per second in 3D (six CLIP images each). CLIP
+takes almost all of that time: rendering a 224² 2D CPPN takes about 2 ms,
+and rendering six 128² views of a 32³ object about 20 ms. A GPU should be
+much faster.
 
 ## Tests
 

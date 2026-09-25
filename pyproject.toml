@@ -18,8 +18,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "scikit-image"]
 niches = ["nltk"]  # only for scripts/make_imagenet_niches.py
+mesh = ["scikit-image"]  # fobj export --mesh (3D)
 
 [project.scripts]
 fobj = "fobj.cli:main"

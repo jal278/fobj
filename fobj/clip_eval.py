@@ -103,11 +103,40 @@ class ClipScorer:
         return F.normalize(self.model.encode_image(images).float(), dim=-1)
 
     @torch.no_grad()
-    def score(self, images):
+    def score(self, images, chunk=256):
         """Returns a (B, num_niches) numpy array of per-niche scores."""
-        sims = self.image_features(images) @ self.text_features.T
+        feats = torch.cat([self.image_features(images[i:i + chunk])
+                           for i in range(0, len(images), chunk)])
+        sims = feats @ self.text_features.T
         if self.mode == "cosine":
             out = sims
         else:
             out = (self.logit_scale * sims + self.logit_bias).softmax(dim=-1)
         return out.cpu().numpy().astype(np.float64)
+
+
+VIEW_AGGREGATIONS = ("geomean", "mean", "min", "prod")
+
+
+def aggregate_views(scores, how="geomean"):
+    """Combine (G, V, N) per-view scores into (G, N) per-object scores.
+
+    ``geomean``/``prod`` suit probabilities (``softmax`` mode) and rank
+    objects the same way the old code's product over views did; ``geomean``
+    keeps the result on the same scale as a single view. With one view every
+    option returns that view's scores unchanged.
+    """
+    scores = np.asarray(scores, dtype=np.float64)
+    if scores.shape[1] == 1:
+        return scores[:, 0]
+    if how == "mean":
+        return scores.mean(1)
+    if how == "min":
+        return scores.min(1)
+    if how in ("geomean", "prod"):
+        if (scores < 0).any():
+            raise ValueError(f"{how} view aggregation needs non-negative scores; "
+                             "use mean or min with --score cosine")
+        logs = np.log(np.maximum(scores, 1e-30))
+        return np.exp(logs.mean(1) if how == "geomean" else logs.sum(1))
+    raise ValueError(f"unknown view aggregation {how!r}")

@@ -15,6 +15,8 @@ def _output_activation(x):
 class Renderer2D:
     """Evaluates a genome at every pixel of a ``size`` x ``size`` grid."""
 
+    num_views = 1
+
     def __init__(self, config, size=224, device="cpu"):
         gc = config.genome_config
         if gc.num_inputs != len(LEAF_NAMES) or gc.num_outputs != len(OUTPUT_NAMES):
@@ -37,8 +39,38 @@ class Renderer2D:
         img = cppn(**self.inputs)
         return torch.nan_to_num(img, nan=0.5).clamp_(0.0, 1.0)
 
+    def render_views(self, genome):
+        """(1, 3, size, size): the 2D domain has a single view."""
+        return self.render(genome)[None]
+
     def render_batch(self, genomes):
         return torch.stack([self.render(g) for g in genomes])
+
+
+DEFAULT_CONFIGS = {"2d": "cppn2d.cfg", "3d": "cppn3d.cfg"}
+DEFAULT_SIZES = {"2d": None, "3d": 128}  # None: the image model's input size
+
+
+def make_renderer(settings, config, device="cpu", size=None):
+    """Build the renderer described by a run's render ``settings`` dict.
+
+    Keys: ``domain`` ("2d"/"3d"), ``size`` and, for 3D, ``voxels``,
+    ``views``, ``fixed_bg``, ``lighting``, ``march_step``. ``size``
+    overrides ``settings["size"]`` (e.g. for high-res export).
+    """
+    domain = settings.get("domain", "2d")
+    size = size or settings["size"]
+    if domain == "2d":
+        return Renderer2D(config, size=size, device=device)
+    if domain == "3d":
+        from .render3d import Renderer3D, default_views
+
+        return Renderer3D(config, size=size, voxels=settings.get("voxels", 32),
+                          views=default_views(settings.get("views", 6)),
+                          fixed_bg=settings.get("fixed_bg", False),
+                          lighting=settings.get("lighting", True),
+                          step=settings.get("march_step", 1.0), device=device)
+    raise ValueError(f"unknown domain {domain!r}")
 
 
 def to_pil(img):
