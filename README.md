@@ -229,7 +229,8 @@ Useful flags:
 | `--batch-size` | 64 | images per CLIP forward pass |
 | `--seed-evals` | 500 | random genomes before elites are mutated |
 | `--curiosity` | off | old `--map_opt` parent selection |
-| `--device` | `auto` | `cuda`, `mps` or `cpu` |
+| `--device` | `auto` | `auto` (cuda > mps > cpu), `cuda[:N]`, `mps` or `cpu` |
+| `--precision` | `fp32` | `fp16` / `bf16` for CLIP and CoCa on a GPU (see above) |
 | `--domain` | `2d` | `2d` images or `3d` voxel objects |
 | `--size` | CLIP input (2d), 128 (3d) | render resolution; images are resized to the CLIP input size |
 | `--voxels` / `--views` | 32 / 6 | 3D grid resolution per axis / views per object |
@@ -246,6 +247,39 @@ in 2D and about 4 objects per second in 3D (six CLIP images each). CLIP
 takes almost all of that time: rendering a 224² 2D CPPN takes about 2 ms,
 and rendering six 128² views of a 32³ object about 20 ms. A GPU should be
 much faster.
+
+## GPUs and Apple silicon (MPS)
+
+`--device auto`, the default for both `run` and `export`, picks CUDA, then
+Apple's MPS, then CPU. So on an Apple-silicon Mac the CPPN rendering, CLIP
+and CoCa all run on the GPU with no flags. The run prints the device it
+chose. You can force a device with `--device mps`, `--device cuda:1` and
+so on; if that device isn't available, the run stops with a message saying
+why.
+
+`--precision fp16` (or `bf16`) runs CLIP and CoCa in half precision. On a
+GPU, MPS included, this is usually a large extra speedup and halves model
+memory. On CPU the flag is refused, because half precision is slow there.
+With half precision, CLIP scores stayed within 0.0003 (fp16) and 0.003
+(bf16) of fp32, and the best-matching niche didn't change. Keep
+`--precision` the same when you resume a run, so scores stay comparable.
+
+```bash
+fobj run --out runs/mac --evals 100000 --precision fp16   # auto picks mps on Apple silicon
+```
+
+Two MPS safeguards:
+* On macOS, fobj sets `PYTORCH_ENABLE_MPS_FALLBACK=1` (unless you set it
+  yourself), so any operation missing from your PyTorch version's MPS
+  backend runs on the CPU instead of crashing the run.
+* The two operations most likely to be missing are avoided on MPS. The 3D
+  renderer uses its own trilinear lookup instead of 5-D `grid_sample` (a
+  test checks the two agree). Antialiased resizing is only used when an
+  image is shrunk.
+
+These MPS code paths have not yet been run on a Mac. The half-precision
+casting was checked on CPU, and the device selection and fallbacks are
+covered by tests.
 
 ## Tests
 

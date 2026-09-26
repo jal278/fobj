@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 from . import caption, clip_eval
+from .device import PRECISIONS, model_dtype, pick_device
 from .genome import GenomeFactory, load_config
 from .map_elites import MapElites
 from .niches import load_niches
@@ -17,16 +18,6 @@ from .render import DEFAULT_CONFIGS, DEFAULT_SIZES, make_renderer, to_pil
 
 CHECKPOINT_VERSION = 2
 DATA = Path(__file__).resolve().parent / "data"
-
-
-def pick_device(name):
-    if name != "auto":
-        return name
-    if torch.cuda.is_available():
-        return "cuda"
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
 
 
 def _write_config_copy(out, config_path):
@@ -161,12 +152,13 @@ def cmd_run(args):
         info = resume["map_elites"]["open_ended"]["niche_info"]
         discovered = [n for n, i in zip(niche_names, info) if i["source"] == "discovered"]
         niche_names = [n for n, i in zip(niche_names, info) if i["source"] != "discovered"]
-    print(f"device={device} niches={len(niche_names) + len(discovered)} "
+    print(f"device={device} precision={args.precision} niches={len(niche_names) + len(discovered)} "
           f"clip={args.clip_model}/{args.clip_pretrained} score={score}")
     scorer = clip_eval.ClipScorer(niche_names, model=args.clip_model,
                                   pretrained=args.clip_pretrained,
                                   templates=args.prompt or clip_eval.DEFAULT_TEMPLATES,
-                                  mode=score, device=device)
+                                  mode=score, device=device,
+                                  dtype=model_dtype(args.precision, device))
     if discovered:
         scorer.add_niches(discovered)
     niche_names = scorer.niche_names  # grows in open-ended runs
@@ -224,7 +216,8 @@ def make_open_ended(settings, scorer, renderer, factory, args, seed, device, out
 
     print(f"open-ended: {settings}")
     captioner = CocaCaptioner(settings["caption_model"], settings["caption_pretrained"],
-                              device=device, prefix=settings.get("caption_prefix", ""))
+                              device=device, prefix=settings.get("caption_prefix", ""),
+                              dtype=model_dtype(args.precision, device))
     discovery = NicheDiscovery(captioner, novelty_threshold=settings["novelty_threshold"],
                                caption_threshold=settings["caption_threshold"],
                                max_per_batch=settings["max_per_batch"],
@@ -334,7 +327,10 @@ def main(argv=None):
     g3.add_argument("--fixed-bg", action="store_true", help="grey background instead of evolved")
     g3.add_argument("--no-lighting", action="store_true", help="flat colours, no shading")
     g3.add_argument("--march-step", type=float, default=1.0, help="ray-march step in voxels")
-    r.add_argument("--device", default="auto")
+    r.add_argument("--device", default="auto",
+                   help="auto (cuda > mps > cpu), cuda, cuda:N, mps (Apple silicon) or cpu")
+    r.add_argument("--precision", choices=sorted(PRECISIONS), default="fp32",
+                   help="CLIP/CoCa weights: fp16 or bf16 are usually much faster on cuda/mps")
     r.add_argument("--log-every", type=int, default=1000)
     r.add_argument("--save-every", type=int, default=10_000)
     r.add_argument("--resume", default=None,

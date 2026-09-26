@@ -88,3 +88,15 @@ def test_aggregate_views():
     np.testing.assert_allclose(aggregate_views(s[:, :1], "geomean"), s[:, 0])
     with pytest.raises(ValueError):
         aggregate_views(-s, "geomean")
+
+
+def test_trilinear_sample_matches_grid_sample():
+    import torch.nn.functional as F
+
+    torch.manual_seed(0)
+    vol = torch.rand(3, 5, 6, 7)  # (C, D, H, W): non-cubic to catch axis mix-ups
+    pts = torch.rand(4, 50, 3) * 2.4 - 1.2  # includes points outside [-1, 1]
+    want = F.grid_sample(vol[None], pts.reshape(1, -1, 1, 1, 3), mode="bilinear",
+                         padding_mode="zeros", align_corners=True).reshape(3, 4, 50)
+    torch.testing.assert_close(Renderer3D._trilinear(vol, pts), want, atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(Renderer3D._sample(vol, pts), want)

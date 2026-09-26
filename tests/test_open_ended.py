@@ -185,6 +185,8 @@ def test_clean_caption():
     assert clean_caption("an image of a green and red light") == "a green and red light"
     assert clean_caption("image of the day") == "image of the day"
     assert clean_caption("stock vector illustration of a red ring") == "a red ring"
+    assert clean_caption("<start_of_text>free stock photo : illustration of a blue and purple "
+                         "background <end_of_text>") == "a blue and purple background"
     for junk in ["green and yellow light effect stock video footage",
                  "green and yellow light effect on pngtree",
                  "green and yellow light effect for cover book, poster o",

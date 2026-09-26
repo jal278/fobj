@@ -24,7 +24,7 @@ SOT, EOT = 49406, 49407  # CLIP BPE start/end-of-text tokens
 
 class CocaCaptioner:
     def __init__(self, model=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED, device="cpu",
-                 max_len=30, min_len=3, repetition_penalty=1.3, prefix=""):
+                 max_len=30, min_len=3, repetition_penalty=1.3, prefix="", dtype=torch.float32):
         """``prefix`` (e.g. "a photo of a") starts every caption, steering CoCa
         towards naming things; it is stripped from the returned captions."""
         import open_clip
@@ -34,6 +34,9 @@ class CocaCaptioner:
         self.model, _, _ = open_clip.create_model_and_transforms(
             model, pretrained=pretrained, device=self.device)
         self.model.eval()
+        self.dtype = dtype
+        if dtype != torch.float32:
+            self.model.to(dtype)
         self.tokenizer = open_clip.get_tokenizer(model)
         self._decode = open_clip.decode
         visual = self.model.visual
@@ -51,9 +54,12 @@ class CocaCaptioner:
     def _prep(self, images):
         images = images.to(self.device, torch.float32)
         if tuple(images.shape[-2:]) != self.image_size:
+            # Antialiasing only matters when shrinking, and its kernel is missing
+            # on some MPS builds; enlarging (e.g. 3D renders) uses plain bicubic.
+            shrink = images.shape[-1] > self.image_size[1] or images.shape[-2] > self.image_size[0]
             images = F.interpolate(images, size=self.image_size, mode="bicubic",
-                                   align_corners=False, antialias=True).clamp_(0, 1)
-        return (images - self.mean) / self.std
+                                   align_corners=False, antialias=shrink).clamp_(0, 1)
+        return ((images - self.mean) / self.std).to(self.dtype)
 
     @torch.no_grad()
     def caption(self, images):
@@ -108,7 +114,7 @@ _BOILERPLATE = [
     r"\bno people\b.*$",
     r"\.?\s*\b(png|jpe?g|gif|svg|webp)\b",
     r"^\s*(photo|image|picture|vector|illustration)s?\s*(of)?\s*:",
-    r"^\s*((an?|free|stock|vector|cartoon|royalty)\s+)*"
+    r"^[\s:;,.\-|]*((an?|free|stock|vector|cartoon|royalty)\s+)*"
     r"(photo|image|picture|vector|illustration|drawing)s? of\s+(?=an?\b)",
 ]
 _DANGLING = {"a", "an", "the", "and", "or", "of", "for", "with", "in", "on", "to", "your", "by", "at"}

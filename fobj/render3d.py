@@ -146,12 +146,42 @@ class Renderer3D:
 
     @staticmethod
     def _sample(volume, pts):
-        """Trilinear lookup. volume (C, N, N, N), pts (..., 3) in [-1, 1] -> (C, ...)."""
+        """Trilinear lookup. volume (C, D, H, W), pts (..., 3) as (x, y, z) in [-1, 1]
+        -> (C, ...). Uses ``grid_sample`` where it is native (CPU, CUDA) and a
+        plain-indexing version on MPS, where 5-D ``grid_sample`` is missing from
+        some PyTorch builds."""
+        if volume.device.type == "mps":
+            return Renderer3D._trilinear(volume, pts)
         shape = pts.shape[:-1]
-        grid = pts.reshape(1, -1, 1, 1, 3)
-        out = F.grid_sample(volume[None], grid, mode="bilinear", padding_mode="zeros",
-                            align_corners=True)
+        out = F.grid_sample(volume[None], pts.reshape(1, -1, 1, 1, 3), mode="bilinear",
+                            padding_mode="zeros", align_corners=True)
         return out.reshape(volume.shape[0], *shape)
+
+    @staticmethod
+    def _trilinear(volume, pts):
+        """``_sample`` from plain indexing: same result as ``grid_sample`` with
+        ``align_corners=True, padding_mode="zeros"``, on any backend."""
+        C, D, H, W = volume.shape
+        shape = pts.shape[:-1]
+        p = pts.reshape(-1, 3)
+        size = torch.tensor([W, H, D], device=p.device, dtype=p.dtype)
+        u = (p + 1) * 0.5 * (size - 1)            # continuous voxel coords (x, y, z)
+        i0 = torch.floor(u)
+        f = u - i0
+        i0 = i0.long()
+        flat = volume.reshape(C, -1)
+        out = torch.zeros(C, len(p), device=volume.device, dtype=volume.dtype)
+        for dx in (0, 1):
+            for dy in (0, 1):
+                for dz in (0, 1):
+                    ix, iy, iz = i0[:, 0] + dx, i0[:, 1] + dy, i0[:, 2] + dz
+                    w = ((f[:, 0] if dx else 1 - f[:, 0]) * (f[:, 1] if dy else 1 - f[:, 1])
+                         * (f[:, 2] if dz else 1 - f[:, 2]))
+                    inside = ((ix >= 0) & (ix < W) & (iy >= 0) & (iy < H)
+                              & (iz >= 0) & (iz < D))
+                    idx = (iz.clamp(0, D - 1) * H + iy.clamp(0, H - 1)) * W + ix.clamp(0, W - 1)
+                    out += flat[:, idx] * (w * inside)
+        return out.reshape(C, *shape)
 
     @torch.no_grad()
     def render_views(self, genome):

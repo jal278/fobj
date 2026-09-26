@@ -30,7 +30,7 @@ CACHE_DIR = Path(os.environ.get("FOBJ_CACHE", Path.home() / ".cache" / "fobj"))
 class ClipScorer:
     def __init__(self, niche_names, model=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED,
                  templates=DEFAULT_TEMPLATES, mode="softmax", device="cpu",
-                 cache=True):
+                 cache=True, dtype=torch.float32):
         import open_clip
 
         if mode not in ("softmax", "cosine"):
@@ -41,6 +41,9 @@ class ClipScorer:
         self.model, _, _ = open_clip.create_model_and_transforms(
             model, pretrained=pretrained, device=self.device)
         self.model.eval()
+        self.dtype = dtype
+        if dtype != torch.float32:
+            self.model.to(dtype)
         self.tokenizer = open_clip.get_tokenizer(model)
 
         visual = self.model.visual
@@ -65,7 +68,8 @@ class ClipScorer:
 
     def _cache_path(self):
         h = hashlib.sha1()
-        for part in (self.model_name, self.pretrained, *self.templates, "\0", *self.niche_names):
+        for part in (self.model_name, self.pretrained, str(self.dtype), *self.templates, "\0",
+                     *self.niche_names):
             h.update(part.encode())
             h.update(b"\0")
         return CACHE_DIR / f"text-{h.hexdigest()[:16]}.pt"
@@ -125,9 +129,12 @@ class ClipScorer:
         """images: (B, 3, H, W) floats in [0, 1]. Returns normalised features."""
         images = images.to(self.device, torch.float32)
         if tuple(images.shape[-2:]) != self.image_size:
+            # Antialiasing only matters when shrinking, and its kernel is missing
+            # on some MPS builds; enlarging (e.g. 3D renders) uses plain bicubic.
+            shrink = images.shape[-1] > self.image_size[1] or images.shape[-2] > self.image_size[0]
             images = F.interpolate(images, size=self.image_size, mode="bicubic",
-                                   align_corners=False, antialias=True).clamp_(0, 1)
-        images = (images - self.mean) / self.std
+                                   align_corners=False, antialias=shrink).clamp_(0, 1)
+        images = ((images - self.mean) / self.std).to(self.dtype)
         return F.normalize(self.model.encode_image(images).float(), dim=-1)
 
     @torch.no_grad()
