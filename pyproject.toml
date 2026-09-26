@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fobj"
+version = "0.2.0"
+description = "Evolving images with CPPN-NEAT and MAP-Elites, with niches defined by CLIP text embeddings"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pillow",
+    "torch",
+    "torchvision",
+    "neat-python>=1.0",
+    "open_clip_torch>=2.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "scikit-image"]
+niches = ["nltk"]  # only for scripts/make_imagenet_niches.py
+mesh = ["scikit-image"]  # fobj export --mesh (3D)
+
+[project.scripts]
+fobj = "fobj.cli:main"
+
+[tool.setuptools]
+packages = ["fobj", "fobj.pytorch_neat"]
+
+[tool.setuptools.package-data]
+fobj = ["data/*"]
+"fobj.pytorch_neat" = ["LICENSE"]
